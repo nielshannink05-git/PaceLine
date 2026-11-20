@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { downloadCalendarIcs } from "@/lib/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  CalendarPlus,
   CheckCircle2,
   Clock,
   Flag,
@@ -35,12 +37,13 @@ export type PaceTrain = {
 type Props = {
   eventId: string;
   eventSlug?: string;
+  eventTitle?: string;
+  eventDate?: string;
   sport: "run" | "ride";
   distanceKm: number;
   initialTrains: PaceTrain[];
 };
 
-// Hulpfunctie: seconden -> "1:25:00" of "45:30"
 function formatSecondsToClock(totalSeconds: number): string {
   const hrs = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);
@@ -52,7 +55,6 @@ function formatSecondsToClock(totalSeconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-// Hulpfunctie: berekent min/km (hardlopen) of km/u (wielrennen)
 function formatPaceFromDuration(
   totalSeconds: number,
   distanceKm: number,
@@ -75,6 +77,8 @@ function formatPaceFromDuration(
 export function RacePaceTrains({
   eventId,
   eventSlug,
+  eventTitle,
+  eventDate,
   sport,
   distanceKm,
   initialTrains,
@@ -86,18 +90,20 @@ export function RacePaceTrains({
   const [trains, setTrains] = useState<PaceTrain[]>(initialTrains);
   const isRun = sport === "run";
 
-  // Auth & Clubhuis-koppeling state
+  // Auth, Clubhuis & Introducee state
   const [user, setUser] = useState<User | null>(null);
   const [profileName, setProfileName] = useState<string>("");
   const [joinedTrainIds, setJoinedTrainIds] = useState<string[]>([]);
+  const [guestCountByTrain, setGuestCountByTrain] = useState<Record<string, number>>({});
+  const [totalGuestsByTrain, setTotalGuestsByTrain] = useState<Record<string, number>>({});
   const [busyTrainId, setBusyTrainId] = useState<string | null>(null);
 
-  // Bezoeker's eigen gewenste streeftijd voor de ±5% match
+  // Filter ± 5%
   const [filterHours, setFilterHours] = useState<string>(isRun ? "1" : "3");
   const [filterMinutes, setFilterMinutes] = useState<string>(isRun ? "30" : "00");
   const [useFilter, setUseFilter] = useState<boolean>(false);
 
-  // State voor formulier "Nieuw treintje starten"
+  // Formulier "Nieuw treintje starten"
   const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
   const [creatorName, setCreatorName] = useState<string>("");
   const [createHours, setCreateHours] = useState<string>(isRun ? "1" : "3");
@@ -108,9 +114,26 @@ export function RacePaceTrains({
 
   const returnPath = eventSlug ? `/wedstrijden/${eventSlug}` : pathname;
 
-  // Haal ingelogde gebruiker, profielnaam en aangemelde treintjes op
   useEffect(() => {
-    async function loadUserState() {
+    async function loadUserAndGuests() {
+      const trainIds = initialTrains.map((t) => t.id);
+
+      // Haal publieke introducee-aantallen op voor alle treintjes van deze race
+      if (trainIds.length > 0) {
+        const { data: allMembers } = await supabase
+          .from("pace_train_members")
+          .select("train_id, guest_count")
+          .in("train_id", trainIds);
+
+        if (allMembers) {
+          const totals: Record<string, number> = {};
+          for (const row of allMembers) {
+            totals[row.train_id] = (totals[row.train_id] ?? 0) + (row.guest_count ?? 0);
+          }
+          setTotalGuestsByTrain(totals);
+        }
+      }
+
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
@@ -126,7 +149,7 @@ export function RacePaceTrains({
           .single(),
         supabase
           .from("pace_train_members")
-          .select("train_id")
+          .select("train_id, guest_count")
           .eq("user_id", currentUser.id),
       ]);
 
@@ -137,25 +160,27 @@ export function RacePaceTrains({
 
       if (memberships) {
         setJoinedTrainIds(memberships.map((m) => m.train_id));
+        const myGuests: Record<string, number> = {};
+        for (const m of memberships) {
+          myGuests[m.train_id] = m.guest_count ?? 0;
+        }
+        setGuestCountByTrain(myGuests);
       }
     }
 
-    loadUserState();
-  }, [supabase]);
+    loadUserAndGuests();
+  }, [supabase, initialTrains]);
 
-  // Bereken gewenste streeftijd in seconden van de bezoeker
   const desiredSeconds =
     parseInt(filterHours || "0", 10) * 3600 +
     parseInt(filterMinutes || "0", 10) * 60;
 
-  // Check of een treintje binnen ±5% van desiredSeconds valt
   const isMatch = (trainSeconds: number) => {
     if (!useFilter || desiredSeconds <= 0) return false;
     const diff = Math.abs(trainSeconds - desiredSeconds);
     return diff <= desiredSeconds * 0.05;
   };
 
-  // Sorteer treintjes: als filter aanstaat komen matches eerst, daarna op snelste tijd
   const sortedTrains = [...trains].sort((a, b) => {
     const aMatch = isMatch(a.target_duration_seconds) ? 1 : 0;
     const bMatch = isMatch(b.target_duration_seconds) ? 1 : 0;
@@ -176,7 +201,6 @@ export function RacePaceTrains({
     setShowCreateForm(true);
   }
 
-  // Nieuw treintje opslaan in Supabase én direct koppelen aan Mijn Clubhuis
   async function handleCreateTrain(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
@@ -209,11 +233,11 @@ export function RacePaceTrains({
       .single();
 
     if (!error && data) {
-      // Koppel maker direct in pace_train_members zodat het treintje in /clubhuis staat
       await supabase.from("pace_train_members").insert({
         train_id: data.id,
         user_id: user.id,
         member_name: cleanName,
+        guest_count: 0,
       });
 
       setTrains([...trains, data as PaceTrain]);
@@ -228,7 +252,6 @@ export function RacePaceTrains({
     setIsCreating(false);
   }
 
-  // Aanhaken bij bestaand treintje (slaat op in pace_train_members + participants)
   async function handleJoinTrain(train: PaceTrain) {
     if (!user) {
       router.push(`/login?next=${encodeURIComponent(returnPath)}`);
@@ -244,6 +267,7 @@ export function RacePaceTrains({
         train_id: train.id,
         user_id: user.id,
         member_name: cleanName,
+        guest_count: 0,
       });
 
     if (memberError) {
@@ -267,11 +291,37 @@ export function RacePaceTrains({
       )
     );
     setJoinedTrainIds((prev) => [...prev, train.id]);
+    setGuestCountByTrain((prev) => ({ ...prev, [train.id]: 0 }));
     setBusyTrainId(null);
     router.refresh();
   }
 
-  // Afmelden bij een treintje (verwijdert uit pace_train_members + participants)
+  async function handleToggleGuest(train: PaceTrain) {
+    if (!user) return;
+    const currentGuests = guestCountByTrain[train.id] ?? 0;
+    const nextGuests = currentGuests > 0 ? 0 : 1;
+
+    setBusyTrainId(train.id);
+
+    const { error } = await supabase
+      .from("pace_train_members")
+      .update({ guest_count: nextGuests })
+      .eq("train_id", train.id)
+      .eq("user_id", user.id);
+
+    if (!error) {
+      const diff = nextGuests - currentGuests;
+      setGuestCountByTrain((prev) => ({ ...prev, [train.id]: nextGuests }));
+      setTotalGuestsByTrain((prev) => ({
+        ...prev,
+        [train.id]: Math.max(0, (prev[train.id] ?? 0) + diff),
+      }));
+      router.refresh();
+    }
+
+    setBusyTrainId(null);
+  }
+
   async function handleLeaveTrain(train: PaceTrain) {
     if (!user) return;
     setBusyTrainId(train.id);
@@ -285,6 +335,7 @@ export function RacePaceTrains({
     if (!error) {
       const cleanName = (profileName || "").trim();
       const updatedParticipants = train.participants.filter((p) => p !== cleanName);
+      const removedGuests = guestCountByTrain[train.id] ?? 0;
 
       await supabase
         .from("pace_trains")
@@ -297,10 +348,35 @@ export function RacePaceTrains({
         )
       );
       setJoinedTrainIds((prev) => prev.filter((id) => id !== train.id));
+      setTotalGuestsByTrain((prev) => ({
+        ...prev,
+        [train.id]: Math.max(0, (prev[train.id] ?? 0) - removedGuests),
+      }));
       router.refresh();
     }
 
     setBusyTrainId(null);
+  }
+
+  function handleAddToCalendar(train: PaceTrain) {
+    const timeStr = formatSecondsToClock(train.target_duration_seconds);
+    const paceStr = formatPaceFromDuration(
+      train.target_duration_seconds,
+      distanceKm,
+      sport
+    );
+
+    downloadCalendarIcs({
+      title: `PaceLine Treintje (${timeStr}) — ${eventTitle ?? "Wedstrijd"}`,
+      startDateIso: eventDate ?? new Date().toISOString().slice(0, 10),
+      durationMinutes: Math.max(60, Math.round(train.target_duration_seconds / 60) + 30),
+      location: train.meeting_point,
+      description:
+        `Streeftijd: ${timeStr} (${paceStr})\n` +
+        `Verzamelpunt: ${train.meeting_point}\n` +
+        `Afspraak: ${train.rule_type === "no_drop" ? "Samen uit, samen thuis" : "Strak op schema"}`,
+      filename: `paceline-${eventSlug ?? "treintje"}.ics`,
+    });
   }
 
   return (
@@ -364,7 +440,6 @@ export function RacePaceTrains({
             </div>
           </div>
 
-          {/* Melding als er nog geen treintje is voor de ingevoerde tijd */}
           {useFilter && desiredSeconds > 0 && !hasAnyMatch && (
             <div className="mt-4 flex flex-col justify-between gap-3 rounded-lg border border-dashed bg-muted/40 p-4 sm:flex-row sm:items-center">
               <div className="text-sm">
@@ -551,6 +626,9 @@ export function RacePaceTrains({
           {sortedTrains.map((train) => {
             const matched = isMatch(train.target_duration_seconds);
             const isJoined = joinedTrainIds.includes(train.id);
+            const myGuests = guestCountByTrain[train.id] ?? 0;
+            const extraGuests = totalGuestsByTrain[train.id] ?? 0;
+            const totalHeadcount = train.participants.length + extraGuests;
             const paceText = formatPaceFromDuration(
               train.target_duration_seconds,
               distanceKm,
@@ -582,12 +660,25 @@ export function RacePaceTrains({
                       </Badge>
                     </div>
 
-                    {matched && (
-                      <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                        <Sparkles className="mr-1 h-3 w-3" />
-                        Beste match
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {matched && (
+                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                          <Sparkles className="mr-1 h-3 w-3" />
+                          Beste match
+                        </Badge>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddToCalendar(train)}
+                        title="Zet in mijn agenda (.ics)"
+                        className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Agenda</span>
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Spelregel badge */}
@@ -616,10 +707,11 @@ export function RacePaceTrains({
                     </div>
                   </div>
 
-                  {/* Deelnemers */}
+                  {/* Deelnemers incl. introducees */}
                   <div>
                     <span className="block text-xs font-medium text-muted-foreground mb-1.5">
-                      Meelopers / meerijders ({train.participants.length}):
+                      Meelopers / meerijders ({totalHeadcount}
+                      {extraGuests > 0 ? ` · incl. ${extraGuests} introducee` : ""}):
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {train.participants.map((person, idx) => (
@@ -631,6 +723,11 @@ export function RacePaceTrains({
                           {idx === 0 && (
                             <span className="ml-1 text-[10px] text-muted-foreground">(starter)</span>
                           )}
+                          {person === profileName && myGuests > 0 && (
+                            <span className="ml-1.5 rounded bg-orange-100 px-1 text-[10px] font-bold text-orange-800">
+                              +{myGuests}
+                            </span>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -639,21 +736,37 @@ export function RacePaceTrains({
 
                 <CardFooter className="border-t pt-3">
                   {isJoined ? (
-                    <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex w-full flex-wrap items-center justify-between gap-2">
                       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        Staat in Mijn Clubhuis
+                        In Clubhuis
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busyTrainId === train.id}
-                        onClick={() => handleLeaveTrain(train)}
-                        className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                      >
-                        <UserMinus className="mr-1.5 h-3.5 w-3.5" />
-                        Afmelden
-                      </Button>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant={myGuests > 0 ? "secondary" : "outline"}
+                          size="sm"
+                          disabled={busyTrainId === train.id}
+                          onClick={() => handleToggleGuest(train)}
+                          className="h-8 text-xs gap-1"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          {myGuests > 0 ? "Met +1 introducee" : "+1 Introducee"}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={busyTrainId === train.id}
+                          onClick={() => handleLeaveTrain(train)}
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+                          title="Afmelden bij treintje"
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <Button

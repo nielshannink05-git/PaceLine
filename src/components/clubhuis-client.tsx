@@ -4,69 +4,70 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { downloadCalendarIcs } from "@/lib/calendar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
+  ArrowRight,
+  Bike,
   Calendar,
+  CalendarPlus,
+  CheckCircle2,
+  Clock,
+  Footprints,
   MapPin,
   MessageSquare,
   Send,
-  Plus,
-  User,
-  Footprints,
-  Bike,
-  ArrowRight,
-  Check,
-  Trash2,
+  Shield,
+  Trophy,
+  User as UserIcon,
+  Users,
 } from "lucide-react";
 
-export type ClubTrainItem = {
-  membershipId: string;
-  trainId: string;
-  targetTimeFormatted: string;
-  paceLabel: string;
-  meetingPoint: string;
-  noDrop: boolean;
-  event: {
-    id: string;
-    slug: string;
-    title: string;
-    sport: "run" | "ride";
-    event_date: string;
-    distance_km: number;
-  };
+export type MyClubSummary = {
+  id: string;
+  slug: string;
+  name: string;
+  sport: "run" | "ride" | "both";
+  city: string;
+  home_base: string;
+  weekly_schedule: string;
 };
 
-export type TrainMessage = {
+export type AgendaChatMessage = {
   id: string;
-  train_id: string;
+  channelId: string; // train_id of ride_id
   user_id: string;
   author_name: string;
+  group_label?: string | null;
   content: string;
   created_at: string;
 };
 
-export type ClubTraining = {
+export type UnifiedAgendaItem = {
   id: string;
-  creator_id: string;
-  creator_name: string;
-  sport: "run" | "ride";
+  kind: "race_train" | "social_ride_joined" | "club_ride_suggestion";
+  channelType?: "train" | "ride";
+  channelId?: string;
   title: string;
-  training_date: string;
-  distance_km: number;
-  target_pace_or_speed: string;
-  start_location: string;
-  no_drop: boolean;
-  event_title?: string | null;
+  subtitle?: string | null;
+  sport: "run" | "ride";
+  dateIso: string;
+  distanceKm: number;
+  location: string;
+  paceOrTargetLabel: string;
+  groupName?: string | null;
+  guestCount?: number;
+  noDrop?: boolean;
+  href: string;
 };
 
-type EventOption = {
-  id: string;
-  title: string;
-  sport: "run" | "ride";
-};
+// Behoud oude exports voor eventuele imports elders
+export type ClubTrainItem = any;
+export type TrainMessage = any;
+export type ClubTraining = any;
 
 type Props = {
   userId: string;
@@ -74,584 +75,576 @@ type Props = {
   initialProfile: {
     full_name: string;
     city: string | null;
-    body_weight_kg: number | null;
+    body_weight_kg: number;
   };
-  myTrains: ClubTrainItem[];
-  initialMessages: TrainMessage[];
-  initialTrainings: ClubTraining[];
-  eventsList: EventOption[];
+  myClubs: MyClubSummary[];
+  agendaItems: UnifiedAgendaItem[];
+  initialMessages: AgendaChatMessage[];
 };
 
 export function ClubhuisClient({
   userId,
   userEmail,
   initialProfile,
-  myTrains,
+  myClubs,
+  agendaItems,
   initialMessages,
-  initialTrainings,
-  eventsList,
 }: Props) {
   const router = useRouter();
   const supabase = createClient();
 
-  // 1. Profiel state
-  const [fullName, setFullName] = useState(initialProfile.full_name || "");
-  const [city, setCity] = useState(initialProfile.city || "");
-  const [weight, setWeight] = useState(String(initialProfile.body_weight_kg ?? 75));
+  // Profiel state
+  const [fullName, setFullName] = useState(initialProfile.full_name);
+  const [city, setCity] = useState(initialProfile.city ?? "");
+  const [weightKg, setWeightKg] = useState(
+    String(initialProfile.body_weight_kg ?? 75)
+  );
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
-  // 2. Chat state
-  const [messages, setMessages] = useState<TrainMessage[]>(initialMessages);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [sendingTrainId, setSendingTrainId] = useState<string | null>(null);
-
-  // 3. Training inplannen state
-  const [trainings, setTrainings] = useState<ClubTraining[]>(initialTrainings);
-  const [showNewTraining, setShowNewTraining] = useState(false);
-  const [tSport, setTSport] = useState<"run" | "ride">("run");
-  const [tTitle, setTTitle] = useState("");
-  const [tDate, setTDate] = useState("");
-  const [tDistance, setTDistance] = useState("15");
-  const [tPace, setTPace] = useState("4:45 /km");
-  const [tLocation, setTLocation] = useState("");
-  const [tEventId, setTEventId] = useState("");
-  const [tNoDrop, setTNoDrop] = useState(true);
-  const [creatingTraining, setCreatingTraining] = useState(false);
+  // Chat state (voor zowel wedstrijd-treintjes als social ritten)
+  const [messages, setMessages] = useState<AgendaChatMessage[]>(initialMessages);
+  const [openChatKey, setOpenChatKey] = useState<string | null>(() => {
+    // Open standaard de chat van het eerstvolgende aangemelde item
+    const firstWithChat = agendaItems.find((item) => item.channelId);
+    return firstWithChat ? `${firstWithChat.channelType}:${firstWithChat.channelId}` : null;
+  });
+  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) return;
     setSavingProfile(true);
     setProfileSaved(false);
 
-    const parsedWeight = Number(weight);
-    await supabase
-      .from("profiles")
-      .update({
-        full_name: fullName.trim(),
-        city: city.trim() || null,
-        body_weight_kg: Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : 75,
-      })
-      .eq("id", userId);
+    const { error } = await supabase.from("profiles").upsert({
+      id: userId,
+      full_name: fullName.trim() || "Sporter",
+      city: city.trim() || null,
+      body_weight_kg: Number(weightKg) || 75,
+    });
 
     setSavingProfile(false);
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2500);
-    router.refresh();
+    if (!error) {
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+      router.refresh();
+    }
   }
 
-  async function handleSendMessage(trainId: string) {
-    const text = (drafts[trainId] || "").trim();
+  async function handleSendMessage(item: UnifiedAgendaItem, e: React.FormEvent) {
+    e.preventDefault();
+    if (!item.channelId || !item.channelType) return;
+
+    const chatKey = `${item.channelType}:${item.channelId}`;
+    const text = (draftTexts[chatKey] ?? "").trim();
     if (!text) return;
 
-    setSendingTrainId(trainId);
-    const { data, error } = await supabase
-      .from("train_messages")
-      .insert({
-        train_id: trainId,
-        user_id: userId,
-        author_name: fullName.trim() || "Sporter",
-        content: text,
-      })
-      .select()
-      .single();
+    setSendingKey(chatKey);
+    const author = fullName.trim() || userEmail.split("@")[0] || "Sporter";
 
-    setSendingTrainId(null);
+    if (item.channelType === "train") {
+      const { data, error } = await supabase
+        .from("train_messages")
+        .insert({
+          train_id: item.channelId,
+          user_id: userId,
+          author_name: author,
+          content: text,
+        })
+        .select("id, train_id, user_id, author_name, content, created_at")
+        .single();
 
-    if (!error && data) {
-      setMessages((prev) => [...prev, data as TrainMessage]);
-      setDrafts((prev) => ({ ...prev, [trainId]: "" }));
+      if (!error && data) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            channelId: data.train_id,
+            user_id: data.user_id,
+            author_name: data.author_name,
+            content: data.content,
+            created_at: data.created_at,
+          },
+        ]);
+        setDraftTexts((prev) => ({ ...prev, [chatKey]: "" }));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from("social_ride_messages")
+        .insert({
+          ride_id: item.channelId,
+          user_id: userId,
+          author_name: author,
+          group_label: item.groupName ?? null,
+          content: text,
+        })
+        .select("id, ride_id, user_id, author_name, group_label, content, created_at")
+        .single();
+
+      if (!error && data) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            channelId: data.ride_id,
+            user_id: data.user_id,
+            author_name: data.author_name,
+            group_label: data.group_label,
+            content: data.content,
+            created_at: data.created_at,
+          },
+        ]);
+        setDraftTexts((prev) => ({ ...prev, [chatKey]: "" }));
+      }
     }
-  }
 
-  async function handleCreateTraining(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tTitle.trim() || !tDate || !tLocation.trim()) return;
-
-    setCreatingTraining(true);
-    const parsedDist = Number(tDistance) || 10;
-    const selectedEvent = eventsList.find((ev) => ev.id === tEventId);
-
-    const { data, error } = await supabase
-      .from("club_trainings")
-      .insert({
-        creator_id: userId,
-        creator_name: fullName.trim() || "Sporter",
-        event_id: tEventId || null,
-        sport: tSport,
-        title: tTitle.trim(),
-        training_date: new Date(tDate).toISOString(),
-        distance_km: parsedDist,
-        target_pace_or_speed: tPace.trim(),
-        start_location: tLocation.trim(),
-        no_drop: tNoDrop,
-      })
-      .select()
-      .single();
-
-    setCreatingTraining(false);
-
-    if (!error && data) {
-      setTrainings((prev) => [
-        ...prev,
-        { ...(data as ClubTraining), event_title: selectedEvent?.title ?? null },
-      ]);
-      setTTitle("");
-      setTLocation("");
-      setShowNewTraining(false);
-    }
-  }
-
-  async function handleDeleteTraining(id: string) {
-    const { error } = await supabase.from("club_trainings").delete().eq("id", id);
-    if (!error) {
-      setTrainings((prev) => prev.filter((item) => item.id !== id));
-    }
+    setSendingKey(null);
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      {/* Linkerkolom (4 cols): Profiel & Snelkoppelingen */}
-      <div className="lg:col-span-4 space-y-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-orange-600" />
-              <CardTitle className="text-lg">Mijn Sportersprofiel</CardTitle>
-            </div>
-            <CardDescription className="truncate">{userEmail}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Weergavenaam (zichtbaar in treintjes)
-                </label>
-                <Input
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-              </div>
+    <div className="space-y-8">
+      {/* 1. MIJN CLUBS (Snelkoppelingen) */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Shield className="h-5 w-5 text-orange-600" />
+            Mijn Clubs ({myClubs.length})
+          </h2>
+          <Link
+            href="/social"
+            className="text-xs font-semibold text-orange-600 hover:underline"
+          >
+            Ontdek alle clubs & ritten →
+          </Link>
+        </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Regio / Woonplaats
-                </label>
-                <Input
-                  placeholder="Bijv. Nijverdal / Twente"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
+        {myClubs.length === 0 ? (
+          <Card className="border-dashed border-slate-300 bg-white">
+            <CardContent className="py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="space-y-1 text-center sm:text-left">
+                <p className="text-sm font-semibold text-slate-900">
+                  Je bent nog geen lid van een lokale club
+                </p>
+                <p className="text-xs text-slate-500">
+                  Sluit je aan bij een vaste hub in jouw regio om wekelijkse ritten automatisch hier te zien.
+                </p>
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Gewicht (kg, voor W/kg schatting)
-                </label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  className="font-mono"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                size="sm"
-                disabled={savingProfile}
-                className="w-full gap-1.5"
+              <Link
+                href="/social"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors"
               >
-                {profileSaved ? (
-                  <>
-                    <Check className="h-4 w-4 text-emerald-500" />
-                    Opgeslagen
-                  </>
-                ) : savingProfile ? (
-                  "Opslaan..."
-                ) : (
-                  "Profiel bijwerken"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+                Bekijk lokale clubs
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {myClubs.map((club) => {
+              const isRun = club.sport === "run";
+              const isRide = club.sport === "ride";
+              return (
+                <Link
+                  key={club.id}
+                  href={`/social/clubs/${club.slug}`}
+                  className={`group rounded-xl border border-slate-200 bg-white p-4 shadow-2xs hover:shadow-md transition-all border-l-4 flex flex-col justify-between gap-2.5 ${
+                    isRun
+                      ? "border-l-orange-500"
+                      : isRide
+                      ? "border-l-teal-600"
+                      : "border-l-slate-900"
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        📍 {club.city}
+                      </span>
+                      <span className="text-xs font-semibold text-orange-600 group-hover:translate-x-0.5 transition-transform">
+                        Open club →
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-base text-slate-900 group-hover:text-orange-600 transition-colors">
+                      {club.name}
+                    </h3>
+                    <p className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate">{club.weekly_schedule}</span>
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-      {/* Rechterkolom (8 cols): Mijn Pace-treintjes + Startvak Chat + Trainingen */}
-      <div className="lg:col-span-8 space-y-8">
-        {/* SECTIE 1: Aangemelde Pace-treintjes & Chat */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
+      {/* 2. HOOFDGRID: LINKS CHRONOLOGISCHE AGENDA + CHAT, RECHTS PROFIEL */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Linkerkolom (8 cols): Mijn Aankomende Agenda */}
+        <div className="lg:col-span-8 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Mijn Pace-treintjes</h2>
-              <p className="text-sm text-muted-foreground">
-                Stem direct met je groepje af waar jullie elkaar herkennen in het startvak.
+              <h2 className="text-lg font-bold text-slate-900">
+                Mijn Aankomende Agenda ({agendaItems.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Al jouw wedstrijden, social ritten en club-afspraken chronologisch op één rij.
               </p>
             </div>
-            <Link
-              href="/wedstrijden"
-              className="text-xs font-medium text-orange-600 hover:underline inline-flex items-center gap-1"
-            >
-              Zoek wedstrijd <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
           </div>
 
-          {myTrains.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="py-8 text-center space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Je bent nog niet aangehaakt bij een pace-treintje.
+          {agendaItems.length === 0 ? (
+            <Card className="border-dashed border-slate-300 bg-white">
+              <CardContent className="py-12 text-center space-y-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Je agenda is nog leeg voor de komende periode.
                 </p>
-                <Link
-                  href="/wedstrijden"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-xs font-semibold text-white hover:bg-orange-700"
-                >
-                  Bekijk wedstrijdkalender <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Haak aan bij een pace-treintje op een wedstrijdpagina of stap in een tempogroep bij een Social Rit.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
+                  <Link
+                    href="/wedstrijden"
+                    className="rounded-lg bg-orange-600 px-4 py-2 text-xs font-semibold text-white hover:bg-orange-700"
+                  >
+                    Bekijk wedstrijden
+                  </Link>
+                  <Link
+                    href="/social"
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                  >
+                    Bekijk social ritten
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
-              {myTrains.map((train) => {
-                const isRun = train.event.sport === "run";
-                const trainMsgs = messages.filter((m) => m.train_id === train.trainId);
+              {agendaItems.map((item) => {
+                const isRun = item.sport === "run";
+                const isSuggestion = item.kind === "club_ride_suggestion";
+                const hasChat = Boolean(item.channelId && item.channelType);
+                const chatKey = hasChat
+                  ? `${item.channelType}:${item.channelId}`
+                  : null;
+                const itemMessages = chatKey
+                  ? messages.filter((m) => m.channelId === item.channelId)
+                  : [];
+                const isChatOpen = chatKey !== null && openChatKey === chatKey;
 
                 return (
-                  <Card key={train.membershipId} className="overflow-hidden">
-                    <CardHeader className="pb-3 bg-muted/30 border-b">
+                  <Card
+                    key={item.id}
+                    className={`overflow-hidden border bg-white shadow-xs border-l-4 ${
+                      isSuggestion
+                        ? "border-slate-200 border-dashed border-l-slate-400"
+                        : isRun
+                        ? "border-slate-200 border-l-orange-500"
+                        : "border-slate-200 border-l-teal-600"
+                    }`}
+                  >
+                    <CardContent className="p-5 space-y-4">
+                      {/* Bovenste rij: Type-badge + Agenda download */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {item.kind === "race_train" && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-amber-100 text-amber-950 border border-amber-200 gap-1"
+                            >
+                              <Trophy className="h-3 w-3 text-amber-700" />
+                              Wedstrijd · Pace-treintje
+                            </Badge>
+                          )}
+                          {item.kind === "social_ride_joined" && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-emerald-100 text-emerald-900 border border-emerald-200 gap-1"
+                            >
+                              <CheckCircle2 className="h-3 w-3 text-emerald-700" />
+                              Aangemeld · Social {isRun ? "Run" : "Rit"}
+                            </Badge>
+                          )}
+                          {item.kind === "club_ride_suggestion" && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-slate-100 text-slate-700 border border-slate-200 gap-1"
+                            >
+                              <Shield className="h-3 w-3 text-slate-600" />
+                              Clubrit ({item.subtitle})
+                            </Badge>
+                          )}
+
                           <Badge
                             variant="secondary"
-                            className={
+                            className={`font-mono ${
                               isRun
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-teal-100 text-teal-800"
-                            }
+                                ? "bg-orange-100 text-orange-900"
+                                : "bg-teal-100 text-teal-900"
+                            }`}
                           >
                             {isRun ? (
                               <Footprints className="mr-1 h-3 w-3" />
                             ) : (
                               <Bike className="mr-1 h-3 w-3" />
                             )}
-                            {train.targetTimeFormatted} ({train.paceLabel})
+                            {item.distanceKm} km · {item.paceOrTargetLabel}
                           </Badge>
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {new Date(train.event.event_date).toLocaleDateString("nl-NL", {
-                              day: "numeric",
-                              month: "short",
-                            })}
-                          </span>
+
+                          {(item.guestCount ?? 0) > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-orange-50 text-orange-800 border border-orange-200 text-[11px]"
+                            >
+                              +{item.guestCount} introducee
+                            </Badge>
+                          )}
                         </div>
 
-                        <Link
-                          href={`/wedstrijden/${train.event.slug}`}
-                          className="text-xs font-medium hover:underline"
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            downloadCalendarIcs({
+                              title: `PaceLine: ${item.title}`,
+                              startDateIso: item.dateIso,
+                              durationMinutes: 150,
+                              location: item.location,
+                              description: `${item.distanceKm} km · ${item.paceOrTargetLabel}`,
+                              filename: "paceline-afspraak.ics",
+                            })
+                          }
+                          className="h-7 gap-1 bg-white text-xs text-slate-700"
                         >
-                          Naar wedstrijdpagina →
+                          <CalendarPlus className="h-3.5 w-3.5 text-slate-500" />
+                          Agenda
+                        </Button>
+                      </div>
+
+                      {/* Titel & Details */}
+                      <div>
+                        <Link href={item.href} className="group">
+                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-orange-600 transition-colors">
+                            {item.title}
+                          </h3>
                         </Link>
-                      </div>
-
-                      <CardTitle className="text-base pt-1">{train.event.title}</CardTitle>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                        Verzamelpunt: <strong>{train.meetingPoint}</strong>
-                      </p>
-                    </CardHeader>
-
-                    {/* Treintje-Chat */}
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        Startvak-chat ({trainMsgs.length})
-                      </div>
-
-                      <div className="max-h-44 overflow-y-auto space-y-2 rounded-lg border bg-muted/20 p-3">
-                        {trainMsgs.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">
-                            Nog geen berichten. Laat als eerste weten welk shirt je draagt of hoe laat je bij het vak bent!
+                        {item.groupName && (
+                          <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                            Jouw vak: {item.groupName}
                           </p>
-                        ) : (
-                          trainMsgs.map((msg) => (
-                            <div key={msg.id} className="text-xs leading-relaxed">
-                              <span className="font-semibold text-foreground">
-                                {msg.author_name}:{" "}
-                              </span>
-                              <span className="text-muted-foreground">{msg.content}</span>
-                            </div>
-                          ))
+                        )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                            <Calendar className="h-3.5 w-3.5 text-orange-600" />
+                            {new Date(item.dateIso).toLocaleString("nl-NL", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                            {item.location}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actiebalk onderaan kaart: Chat openen of inschrijven */}
+                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                        <Link
+                          href={item.href}
+                          className="text-xs font-semibold text-slate-700 hover:text-orange-600 transition-colors"
+                        >
+                          {isSuggestion
+                            ? "Kies tempogroep & sluit aan →"
+                            : "Bekijk details & deelnemers →"}
+                        </Link>
+
+                        {hasChat && chatKey && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isChatOpen ? "default" : "outline"}
+                            onClick={() =>
+                              setOpenChatKey(isChatOpen ? null : chatKey)
+                            }
+                            className={`h-8 gap-1.5 text-xs ${
+                              isChatOpen ? "bg-slate-900 text-white" : "bg-white"
+                            }`}
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            {item.channelType === "train"
+                              ? "Startvak-chat"
+                              : "Rit-chat"}{" "}
+                            ({itemMessages.length})
+                          </Button>
                         )}
                       </div>
 
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Stuur een bericht naar je treintje..."
-                          className="text-sm"
-                          value={drafts[train.trainId] || ""}
-                          onChange={(e) =>
-                            setDrafts((prev) => ({
-                              ...prev,
-                              [train.trainId]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleSendMessage(train.trainId);
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={sendingTrainId === train.trainId}
-                          onClick={() => handleSendMessage(train.trainId)}
-                          className={
-                            isRun
-                              ? "bg-orange-600 hover:bg-orange-700 text-white"
-                              : "bg-teal-600 hover:bg-teal-700 text-white"
-                          }
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {/* UITKLAPBARE DIRECTE STARTVAK- & RIT-CHAT */}
+                      {isChatOpen && chatKey && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-slate-800">
+                              {item.channelType === "train"
+                                ? "Startvak-overleg"
+                                : "Rit-chat (weer, materiaal & laatste check)"}
+                            </p>
+                            <span className="text-[11px] text-slate-500">
+                              Zichtbaar voor deelnemers
+                            </span>
+                          </div>
+
+                          <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                            {itemMessages.length === 0 ? (
+                              <p className="text-xs text-slate-500 italic py-3 text-center">
+                                Nog geen berichten. Vraag bijv. hoe het weer is of spreek een verzamelpunt af!
+                              </p>
+                            ) : (
+                              itemMessages.map((msg) => {
+                                const isMe = msg.user_id === userId;
+                                return (
+                                  <div
+                                    key={msg.id}
+                                    className={`rounded-lg border p-2.5 text-xs ${
+                                      isMe
+                                        ? "border-orange-200 bg-orange-50/70 ml-6"
+                                        : "border-slate-200 bg-white mr-6"
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                      <span className="font-bold text-slate-900">
+                                        {msg.author_name}
+                                        {msg.group_label && (
+                                          <span className="ml-1.5 font-normal text-[10px] text-slate-500">
+                                            ({msg.group_label})
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">
+                                        {new Date(
+                                          msg.created_at
+                                        ).toLocaleTimeString("nl-NL", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-700 leading-relaxed">
+                                      {msg.content}
+                                    </p>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          <form
+                            onSubmit={(e) => handleSendMessage(item, e)}
+                            className="flex gap-2"
+                          >
+                            <Input
+                              placeholder={
+                                item.channelType === "ride"
+                                  ? "Bijv. Regent het in Holten? Gaan de spatborden erop?"
+                                  : "Stuur een bericht naar je startvakgroep..."
+                              }
+                              value={draftTexts[chatKey] ?? ""}
+                              onChange={(e) =>
+                                setDraftTexts((prev) => ({
+                                  ...prev,
+                                  [chatKey]: e.target.value,
+                                }))
+                              }
+                              className="h-8 bg-white text-xs"
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={sendingKey === chatKey}
+                              className="h-8 px-3 bg-orange-600 hover:bg-orange-700 text-white"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          </form>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
               })}
             </div>
           )}
-        </section>
+        </div>
 
-        {/* SECTIE 2: Samen Voorbereiden (Trainingen inplannen) */}
-        <section className="space-y-4 pt-4 border-t">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Clubhuis Trainingen</h2>
-              <p className="text-sm text-muted-foreground">
-                Plan een voorbereidingsrit of duurloop en nodig anderen uit om aan te haken.
-              </p>
-            </div>
-
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setShowNewTraining((v) => !v)}
-              className="gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white"
-            >
-              <Plus className="h-4 w-4" />
-              {showNewTraining ? "Annuleren" : "Training inplannen"}
-            </Button>
-          </div>
-
-          {showNewTraining && (
-            <Card className="border-2">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Nieuwe training inplannen</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateTraining} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={tSport === "run" ? "default" : "outline"}
-                      size="sm"
-                      className={tSport === "run" ? "bg-orange-600 text-white" : ""}
-                      onClick={() => {
-                        setTSport("run");
-                        setTPace("4:45 /km");
-                      }}
-                    >
-                      Hardlopen
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={tSport === "ride" ? "default" : "outline"}
-                      size="sm"
-                      className={tSport === "ride" ? "bg-teal-600 text-white" : ""}
-                      onClick={() => {
-                        setTSport("ride");
-                        setTPace("30,5 km/u");
-                      }}
-                    >
-                      Wielrennen
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Titel van de training</label>
-                      <Input
-                        required
-                        placeholder="Bijv. Duurloop richting Halve Marathon"
-                        value={tTitle}
-                        onChange={(e) => setTTitle(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Datum & starttijd</label>
-                      <Input
-                        required
-                        type="datetime-local"
-                        value={tDate}
-                        onChange={(e) => setTDate(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Afstand (km)</label>
-                      <Input
-                        required
-                        type="number"
-                        step="0.5"
-                        className="font-mono"
-                        value={tDistance}
-                        onChange={(e) => setTDistance(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Richtlijn tempo / snelheid</label>
-                      <Input
-                        required
-                        placeholder="4:45 /km of 30 km/u"
-                        className="font-mono"
-                        value={tPace}
-                        onChange={(e) => setTPace(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Startlocatie</label>
-                      <Input
-                        required
-                        placeholder="Bijv. Parkeerplaats Sallandse Heuvelrug"
-                        value={tLocation}
-                        onChange={(e) => setTLocation(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">
-                        Koppel aan wedstrijd (optioneel)
-                      </label>
-                      <select
-                        value={tEventId}
-                        onChange={(e) => setTEventId(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-                      >
-                        <option value="">Geen specifieke wedstrijd</option>
-                        {eventsList.map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={tNoDrop}
-                      onChange={(e) => setTNoDrop(e.target.checked)}
-                    />
-                    Samen uit, samen thuis (No-drop afspraak)
+        {/* Rechterkolom (4 cols): Jouw Sportersprofiel */}
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="border-slate-200 bg-white shadow-xs">
+            <CardHeader className="border-b bg-slate-50/70 pb-3">
+              <CardTitle className="text-base text-slate-900 flex items-center gap-2">
+                <UserIcon className="h-4 w-4 text-slate-700" />
+                Jouw Sportersprofiel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleSaveProfile} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Weergavenaam in groepen & chat
                   </label>
+                  <Input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
 
-                  <Button
-                    type="submit"
-                    disabled={creatingTraining}
-                    className="bg-orange-600 hover:bg-orange-700 text-white"
-                  >
-                    {creatingTraining ? "Inplannen..." : "Training publiceren"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Regio / Woonplaats
+                  </label>
+                  <Input
+                    placeholder="Bijv. Nijverdal"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
 
-          {/* Lijst met geplande clubtrainingen */}
-          <div className="space-y-3">
-            {trainings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nog geen clubtrainingen ingepland. Klik hierboven om de eerste rit of duurloop neer te zetten!
-              </p>
-            ) : (
-              trainings.map((item) => {
-                const isRun = item.sport === "run";
-                return (
-                  <Card key={item.id}>
-                    <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className={
-                              isRun
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-teal-100 text-teal-800"
-                            }
-                          >
-                            {item.distance_km} km · {item.target_pace_or_speed}
-                          </Badge>
-                          {item.no_drop && (
-                            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted">
-                              No-drop
-                            </span>
-                          )}
-                          {item.event_title && (
-                            <span className="text-[11px] font-medium text-orange-700">
-                              Voorbereiding: {item.event_title}
-                            </span>
-                          )}
-                        </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Lichaamsgewicht (kg, voor W/kg pacing)
+                  </label>
+                  <Input
+                    type="number"
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
 
-                        <p className="font-semibold text-sm">{item.title}</p>
-
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            {new Date(item.training_date).toLocaleString("nl-NL", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {item.start_location}
-                          </span>
-                          <span>Door {item.creator_name}</span>
-                        </div>
-                      </div>
-
-                      {item.creator_id === userId && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTraining(item.id)}
-                          className="text-muted-foreground hover:text-destructive shrink-0"
-                          title="Training verwijderen"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </section>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={savingProfile}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs"
+                >
+                  {savingProfile
+                    ? "Opslaan..."
+                    : profileSaved
+                    ? "✓ Profiel opgeslagen"
+                    : "Profiel bijwerken"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
