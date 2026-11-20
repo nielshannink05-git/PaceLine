@@ -38,10 +38,20 @@ const RUN_PRESETS = [
   { label: "10 km", km: 10, defaultSeconds: 46 * 60, minSeconds: 25 * 60 },
   { label: "15 km", km: 15, defaultSeconds: 69 * 60 },
   { label: "10 mijl", km: 16.1, defaultSeconds: 75 * 60 },
-  { label: "Halve Marathon", km: 21.1, defaultSeconds: 100 * 60, minSeconds: 55 * 60 },
+  {
+    label: "Halve Marathon",
+    km: 21.1,
+    defaultSeconds: 100 * 60,
+    minSeconds: 55 * 60,
+  },
   { label: "25 km", km: 25, defaultSeconds: 115 * 60 },
   { label: "30 km", km: 30, defaultSeconds: 140 * 60 },
-  { label: "Marathon", km: 42.2, defaultSeconds: 215 * 60, minSeconds: 110 * 60 },
+  {
+    label: "Marathon",
+    km: 42.2,
+    defaultSeconds: 215 * 60,
+    minSeconds: 110 * 60,
+  },
 ];
 
 const RIDE_PRESETS = [
@@ -57,7 +67,10 @@ const RIDE_PRESETS = [
 ];
 
 function parseDurationInput(value: string): number | null {
-  const parts = value.trim().split(":").map((part) => Number(part));
+  const parts = value
+    .trim()
+    .split(":")
+    .map((part) => Number(part));
   if (
     parts.length < 2 ||
     parts.length > 3 ||
@@ -181,38 +194,56 @@ export function PacingCalculator({
   const isRun = sport === "run";
   const currentDistance = isRun ? runDistance : rideDistance;
   const presets = isRun ? RUN_PRESETS : RIDE_PRESETS;
-  const hasCustomDistance = !presets.some((p) => Math.abs(p.km - currentDistance) < 0.05);
+  const hasCustomDistance = !presets.some(
+    (p) => Math.abs(p.km - currentDistance) < 0.05
+  );
 
   const minTargetSeconds = isRun
     ? RUN_PRESETS.find((preset) => preset.km === runDistance)?.minSeconds ??
       Math.max(1, Math.round(runDistance * 2.5 * 60))
     : 1;
-  const accentText = isRun ? "text-orange-600" : "text-teal-600";
-  const accentBg = isRun ? "bg-orange-600 hover:bg-orange-700" : "bg-teal-600 hover:bg-teal-700";
+
+  const accentHex = isRun ? "#ea580c" : "#047857";
+  const accentText = isRun ? "text-orange-600" : "text-emerald-700";
   const accentBadge = isRun
     ? "bg-orange-50 text-orange-700 border-orange-200"
-    : "bg-teal-50 text-teal-700 border-teal-200";
+    : "bg-emerald-50 text-emerald-800 border-emerald-200";
 
   return (
     <div className="space-y-8">
       {/* Sport Selectie + Rechtsboven Deel-knop */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Tabs value={sport} onValueChange={handleSportChange} className="w-full sm:w-auto">
-            <TabsList className="grid w-full sm:w-[320px] grid-cols-2">
+          <Tabs
+            value={sport}
+            onValueChange={handleSportChange}
+            className="w-full sm:w-auto"
+          >
+            <TabsList className="grid w-full sm:w-[320px] grid-cols-2 bg-stone-100 border border-stone-200">
               <TabsTrigger value="run" className="gap-2">
                 <Footprints className="h-4 w-4 text-orange-600" />
                 Hardlopen
               </TabsTrigger>
               <TabsTrigger value="ride" className="gap-2">
-                <Bike className="h-4 w-4 text-teal-600" />
+                <Bike className="h-4 w-4" style={{ color: "#047857" }} />
                 Wielrennen
               </TabsTrigger>
             </TabsList>
           </Tabs>
 
           {eventTitle && (
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${accentBadge}`}>
+            <span
+              className={`text-xs font-medium px-2.5 py-1 rounded-full border ${accentBadge}`}
+              style={
+                !isRun
+                  ? {
+                      backgroundColor: "#ecfdf5",
+                      color: "#065f46",
+                      borderColor: "#a7f3d0",
+                    }
+                  : undefined
+              }
+            >
               Wedstrijd: {eventTitle}
             </span>
           )}
@@ -246,10 +277,10 @@ export function PacingCalculator({
       {/* Hoofdgrid: Controls links, Resultaten rechts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Linkerkolom: Invoer */}
-        <Card className="lg:col-span-5">
+        <Card className="lg:col-span-5 border-stone-200 bg-white shadow-2xs">
           <CardHeader>
-            <CardTitle>Jouw Doelinstelling</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-zinc-900">Jouw Doelinstelling</CardTitle>
+            <CardDescription className="text-zinc-600">
               {isRun
                 ? "Selecteer een wedstrijdafstand en schuif naar je beoogde eindtijd."
                 : "Stel afstand, tijd en hoogtemeters in voor een realistisch kruistempo."}
@@ -259,9 +290,14 @@ export function PacingCalculator({
             {/* Afstand Presets */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Afstand</label>
+                <label className="text-sm font-medium text-zinc-800">
+                  Afstand
+                </label>
                 {hasCustomDistance && (
-                  <span className={`text-xs font-mono font-semibold tabular-nums ${accentText}`}>
+                  <span
+                    className={`text-xs font-mono font-semibold tabular-nums ${accentText}`}
+                    style={{ color: accentHex }}
+                  >
                     Wedstrijdafstand: {currentDistance} km
                   </span>
                 )}
@@ -274,17 +310,26 @@ export function PacingCalculator({
                       key={preset.label}
                       type="button"
                       variant={active ? "default" : "outline"}
-                      className={active ? accentBg : ""}
+                      className={
+                        active
+                          ? "text-white font-semibold border-0 hover:opacity-90"
+                          : "border-stone-200 text-zinc-700 hover:bg-stone-50"
+                      }
+                      style={active ? { backgroundColor: accentHex } : undefined}
                       size="sm"
                       onClick={() => {
                         if (isRun) {
                           setRunDistance(preset.km);
                           setRunSeconds(preset.defaultSeconds);
-                          setRunDurationDraft(formatDurationInput(preset.defaultSeconds));
+                          setRunDurationDraft(
+                            formatDurationInput(preset.defaultSeconds)
+                          );
                         } else {
                           setRideDistance(preset.km);
                           setRideSeconds(preset.defaultSeconds);
-                          setRideDurationDraft(formatDurationInput(preset.defaultSeconds));
+                          setRideDurationDraft(
+                            formatDurationInput(preset.defaultSeconds)
+                          );
                         }
                       }}
                     >
@@ -298,15 +343,24 @@ export function PacingCalculator({
             {/* Streeftijd Slider */}
             <div className="space-y-3">
               <div className="flex justify-between items-baseline">
-                <label className="text-sm font-medium">Gewenste eindtijd</label>
-                <span className={`text-xl font-bold font-mono tabular-nums ${accentText}`}>
+                <label className="text-sm font-medium text-zinc-800">
+                  Gewenste eindtijd
+                </label>
+                <span
+                  className={`text-xl font-bold font-mono tabular-nums ${accentText}`}
+                  style={{ color: accentHex }}
+                >
                   {formatDuration(isRun ? runSeconds : rideSeconds)}
                 </span>
               </div>
               <Slider
                 value={[isRun ? runSeconds : rideSeconds]}
                 min={minTargetSeconds}
-                max={isRun ? Math.round(runDistance * 7.5 * 60) : Math.round(rideDistance * 3.2 * 60)}
+                max={
+                  isRun
+                    ? Math.round(runDistance * 7.5 * 60)
+                    : Math.round(rideDistance * 3.2 * 60)
+                }
                 step={1}
                 onValueChange={(val) => {
                   const next = Array.isArray(val) ? val[0] : val;
@@ -320,7 +374,10 @@ export function PacingCalculator({
                 }}
               />
               <div className="flex items-center gap-2">
-                <label htmlFor="target-duration" className="text-sm text-muted-foreground">
+                <label
+                  htmlFor="target-duration"
+                  className="text-sm text-zinc-600"
+                >
                   Tijd invoeren
                 </label>
                 <Input
@@ -328,7 +385,7 @@ export function PacingCalculator({
                   type="text"
                   inputMode="text"
                   placeholder="46:30"
-                  className="w-28 font-mono"
+                  className="w-28 font-mono border-stone-200"
                   value={isRun ? runDurationDraft : rideDurationDraft}
                   onChange={(event) => {
                     if (isRun) setRunDurationDraft(event.target.value);
@@ -337,8 +394,10 @@ export function PacingCalculator({
                   onBlur={(event) => {
                     const parsed = parseDurationInput(event.target.value);
                     if (parsed === null) {
-                      if (isRun) setRunDurationDraft(formatDurationInput(runSeconds));
-                      else setRideDurationDraft(formatDurationInput(rideSeconds));
+                      if (isRun)
+                        setRunDurationDraft(formatDurationInput(runSeconds));
+                      else
+                        setRideDurationDraft(formatDurationInput(rideSeconds));
                       return;
                     }
 
@@ -362,8 +421,10 @@ export function PacingCalculator({
 
             {/* Sport-specifieke extra optie */}
             {isRun ? (
-              <div className="space-y-2 pt-2 border-t">
-                <label className="text-sm font-medium">Race-strategie</label>
+              <div className="space-y-2 pt-2 border-t border-stone-200">
+                <label className="text-sm font-medium text-zinc-800">
+                  Race-strategie
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
@@ -384,11 +445,13 @@ export function PacingCalculator({
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 pt-2 border-t">
+              <div className="space-y-4 pt-2 border-t border-stone-200">
                 <div className="space-y-3">
                   <div className="flex justify-between items-baseline">
-                    <label className="text-sm font-medium">Hoogtemeters</label>
-                    <span className="text-sm font-mono font-semibold tabular-nums">
+                    <label className="text-sm font-medium text-zinc-800">
+                      Hoogtemeters
+                    </label>
+                    <span className="text-sm font-mono font-semibold tabular-nums text-zinc-900">
                       {elevation} hm
                     </span>
                   </div>
@@ -404,7 +467,10 @@ export function PacingCalculator({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="body-weight" className="text-sm font-medium">
+                  <label
+                    htmlFor="body-weight"
+                    className="text-sm font-medium text-zinc-800"
+                  >
                     Lichaamsgewicht
                   </label>
                   <div className="flex items-center gap-2">
@@ -417,18 +483,22 @@ export function PacingCalculator({
                       value={bodyWeightDraft}
                       aria-invalid={bodyWeightKg === null}
                       aria-describedby="body-weight-help"
-                      className="w-28 font-mono"
+                      className="w-28 font-mono border-stone-200"
                       onChange={(event) => setBodyWeightDraft(event.target.value)}
                     />
-                    <span className="text-sm text-muted-foreground">kg</span>
+                    <span className="text-sm text-zinc-600">kg</span>
                   </div>
-                  <p id="body-weight-help" className="text-xs text-muted-foreground">
-                    Geschat vermogen gebruikt een fiets van 10 kg, geen wind en standaard
-                    luchtweerstand; het is een richtlijn.
+                  <p
+                    id="body-weight-help"
+                    className="text-xs text-zinc-500"
+                  >
+                    Geschat vermogen gebruikt een fiets van 10 kg, geen wind en
+                    standaard luchtweerstand; het is een richtlijn.
                   </p>
                   {bodyWeightKg === null && (
-                    <p className="text-xs text-destructive">
-                      Vul een lichaamsgewicht groter dan 0 kg in om W/kg te berekenen.
+                    <p className="text-xs text-red-600">
+                      Vul een lichaamsgewicht groter dan 0 kg in om W/kg te
+                      berekenen.
                     </p>
                   )}
                 </div>
@@ -441,12 +511,15 @@ export function PacingCalculator({
         <div className="lg:col-span-7 space-y-6">
           {/* KPI Balk */}
           <div className="grid grid-cols-3 gap-4">
-            <Card>
+            <Card className="border-stone-200 bg-white shadow-2xs">
               <CardContent className="pt-6">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider">
                   {isRun ? "Gem. Tempo" : "Kruissnelheid"}
                 </p>
-                <p className={`text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1 ${accentText}`}>
+                <p
+                  className={`text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1 ${accentText}`}
+                  style={{ color: accentHex }}
+                >
                   {isRun
                     ? formatRunPace(runStats.secPerKm)
                     : `${rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u`}
@@ -454,12 +527,12 @@ export function PacingCalculator({
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-stone-200 bg-white shadow-2xs">
               <CardContent className="pt-6">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider">
                   {isRun ? "Snelheid" : "Vermogen / kg (schatting)"}
                 </p>
-                <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1">
+                <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1 text-zinc-900">
                   {isRun
                     ? `${runStats.speedKmh.toFixed(1).replace(".", ",")} km/u`
                     : rideStats.estimatedWkg === null
@@ -467,34 +540,36 @@ export function PacingCalculator({
                       : `${rideStats.estimatedWkg.toFixed(1).replace(".", ",")} W/kg`}
                 </p>
                 {!isRun && rideStats.estimatedWatts !== null && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-zinc-500 mt-1">
                     circa {Math.round(rideStats.estimatedWatts)} W
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-stone-200 bg-white shadow-2xs">
               <CardContent className="pt-6">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider">
                   Eindtijd
                 </p>
-                <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1">
-                  {formatDuration(isRun ? runStats.totalSeconds : rideStats.totalSeconds)}
+                <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1 text-zinc-900">
+                  {formatDuration(
+                    isRun ? runStats.totalSeconds : rideStats.totalSeconds
+                  )}
                 </p>
               </CardContent>
             </Card>
           </div>
 
           {/* Splittabel */}
-          <Card>
+          <Card className="border-stone-200 bg-white shadow-2xs">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base text-zinc-900">
                 {isRun ? "Kilometer-schema" : "Tussentijden per blok"}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[300px] overflow-y-auto rounded-md border">
+              <div className="max-h-[300px] overflow-y-auto rounded-md border border-stone-200">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -506,7 +581,9 @@ export function PacingCalculator({
                   <TableBody className="font-mono tabular-nums text-sm">
                     {(isRun ? runStats.splits : rideStats.rows).map((row) => (
                       <TableRow key={row.label}>
-                        <TableCell className="font-sans font-medium">{row.label}</TableCell>
+                        <TableCell className="font-sans font-medium">
+                          {row.label}
+                        </TableCell>
                         <TableCell>{row.paceOrSpeedLabel}</TableCell>
                         <TableCell className="text-right font-semibold">
                           {formatDuration(row.cumulativeSeconds)}
@@ -522,38 +599,59 @@ export function PacingCalculator({
       </div>
 
       {/* De Community-trechter: Directe koppeling met Social Sessions */}
-      <Card className="border-2 border-dashed">
+      <Card className="border-2 border-dashed border-stone-300 bg-white">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Users className={`h-5 w-5 ${accentText}`} />
-              <CardTitle className="text-lg">
-                Train samen op dit tempo ({isRun ? formatRunPace(runStats.secPerKm) : `${rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u`})
+              <Users className="h-5 w-5" style={{ color: accentHex }} />
+              <CardTitle className="text-lg text-zinc-900">
+                Train samen op dit tempo (
+                {isRun
+                  ? formatRunPace(runStats.secPerKm)
+                  : `${rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u`}
+                )
               </CardTitle>
             </div>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${accentBadge}`}>
+            <span
+              className={`text-xs font-medium px-2.5 py-1 rounded-full border ${accentBadge}`}
+              style={
+                !isRun
+                  ? {
+                      backgroundColor: "#ecfdf5",
+                      color: "#065f46",
+                      borderColor: "#a7f3d0",
+                    }
+                  : undefined
+              }
+            >
               Live match-preview (± 5% tempo)
             </span>
           </div>
-          <CardDescription>
-            Sporters die zich op ditzelfde tempo voorbereiden op een aankomend evenement:
+          <CardDescription className="text-zinc-600">
+            Sporters die zich op ditzelfde tempo voorbereiden op een aankomend
+            evenement:
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {isRun ? (
               <>
-                <div className="p-4 rounded-lg border bg-card flex items-center justify-between gap-4">
+                <div className="p-4 rounded-lg border border-stone-200 bg-stone-50/60 flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-800">
                         No-Drop • {formatRunPace(runStats.secPerKm)}
                       </span>
-                      <span className="text-xs text-muted-foreground">Zondag 09:30</span>
+                      <span className="text-xs text-zinc-500">
+                        Zondag 09:30
+                      </span>
                     </div>
-                    <p className="font-semibold text-sm">Duurloop Voorbereiding Halve Marathon</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" /> Start: Parkeerplaats Bosrand • 14 km
+                    <p className="font-semibold text-sm text-zinc-900">
+                      Duurloop Voorbereiding Halve Marathon
+                    </p>
+                    <p className="text-xs text-zinc-500 flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> Start: Parkeerplaats
+                      Bosrand • 14 km
                     </p>
                   </div>
                   <Button size="sm" variant="outline" className="shrink-0 gap-1">
@@ -561,17 +659,22 @@ export function PacingCalculator({
                   </Button>
                 </div>
 
-                <div className="p-4 rounded-lg border bg-card flex items-center justify-between gap-4">
+                <div className="p-4 rounded-lg border border-stone-200 bg-stone-50/60 flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-800">
                         Tempotraining • {formatRunPace(runStats.secPerKm - 5)}
                       </span>
-                      <span className="text-xs text-muted-foreground">Woensdag 19:00</span>
+                      <span className="text-xs text-zinc-500">
+                        Woensdag 19:00
+                      </span>
                     </div>
-                    <p className="font-semibold text-sm">Avondrondje 10K Pacing Groep</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" /> Start: Atletiekbaan Centrum • 10 km
+                    <p className="font-semibold text-sm text-zinc-900">
+                      Avondrondje 10K Pacing Groep
+                    </p>
+                    <p className="text-xs text-zinc-500 flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> Start: Atletiekbaan
+                      Centrum • 10 km
                     </p>
                   </div>
                   <Button size="sm" variant="outline" className="shrink-0 gap-1">
@@ -581,17 +684,29 @@ export function PacingCalculator({
               </>
             ) : (
               <>
-                <div className="p-4 rounded-lg border bg-card flex items-center justify-between gap-4">
+                <div className="p-4 rounded-lg border border-stone-200 bg-stone-50/60 flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-800">
-                        Samen uit, samen thuis • {rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor: "#d1fae5",
+                          color: "#065f46",
+                        }}
+                      >
+                        Samen uit, samen thuis •{" "}
+                        {rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u
                       </span>
-                      <span className="text-xs text-muted-foreground">Zaterdag 09:00</span>
+                      <span className="text-xs text-zinc-500">
+                        Zaterdag 09:00
+                      </span>
                     </div>
-                    <p className="font-semibold text-sm">Social Ride Heuvelrug & Koffiestop</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" /> Wielercafé Centraal • {rideDistance} km
+                    <p className="font-semibold text-sm text-zinc-900">
+                      Social Ride Heuvelrug &amp; Koffiestop
+                    </p>
+                    <p className="text-xs text-zinc-500 flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> Wielercafé Centraal
+                      • {rideDistance} km
                     </p>
                   </div>
                   <Button size="sm" variant="outline" className="shrink-0 gap-1">
@@ -599,16 +714,30 @@ export function PacingCalculator({
                   </Button>
                 </div>
 
-                <div className="p-4 rounded-lg border bg-card flex items-center justify-between gap-4">
+                <div className="p-4 rounded-lg border border-stone-200 bg-stone-50/60 flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-800">
-                        Strak Tempo • {(rideStats.avgSpeedKmh + 0.8).toFixed(1).replace(".", ",")} km/u
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor: "#d1fae5",
+                          color: "#065f46",
+                        }}
+                      >
+                        Strak Tempo •{" "}
+                        {(rideStats.avgSpeedKmh + 0.8)
+                          .toFixed(1)
+                          .replace(".", ",")}{" "}
+                        km/u
                       </span>
-                      <span className="text-xs text-muted-foreground">Donderdag 18:30</span>
+                      <span className="text-xs text-zinc-500">
+                        Donderdag 18:30
+                      </span>
                     </div>
-                    <p className="font-semibold text-sm">Avondrit Kop-over-Kop</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <p className="font-semibold text-sm text-zinc-900">
+                      Avondrit Kop-over-Kop
+                    </p>
+                    <p className="text-xs text-zinc-500 flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" /> Brug Noord • 65 km
                     </p>
                   </div>

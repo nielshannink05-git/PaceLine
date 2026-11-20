@@ -23,7 +23,6 @@ import {
   Shield,
   Trophy,
   User as UserIcon,
-  Users,
 } from "lucide-react";
 
 export type MyClubSummary = {
@@ -105,9 +104,10 @@ export function ClubhuisClient({
   // Chat state (voor zowel wedstrijd-treintjes als social ritten)
   const [messages, setMessages] = useState<AgendaChatMessage[]>(initialMessages);
   const [openChatKey, setOpenChatKey] = useState<string | null>(() => {
-    // Open standaard de chat van het eerstvolgende aangemelde item
     const firstWithChat = agendaItems.find((item) => item.channelId);
-    return firstWithChat ? `${firstWithChat.channelType}:${firstWithChat.channelId}` : null;
+    return firstWithChat
+      ? `${firstWithChat.channelType}:${firstWithChat.channelId}`
+      : null;
   });
   const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
   const [sendingKey, setSendingKey] = useState<string | null>(null);
@@ -179,7 +179,9 @@ export function ClubhuisClient({
           group_label: item.groupName ?? null,
           content: text,
         })
-        .select("id, ride_id, user_id, author_name, group_label, content, created_at")
+        .select(
+          "id, ride_id, user_id, author_name, group_label, content, created_at"
+        )
         .single();
 
       if (!error && data) {
@@ -207,7 +209,7 @@ export function ClubhuisClient({
       {/* 1. MIJN CLUBS (Snelkoppelingen) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
             <Shield className="h-5 w-5 text-orange-600" />
             Mijn Clubs ({myClubs.length})
           </h2>
@@ -215,24 +217,25 @@ export function ClubhuisClient({
             href="/social"
             className="text-xs font-semibold text-orange-600 hover:underline"
           >
-            Ontdek alle clubs & ritten →
+            Ontdek alle clubs &amp; ritten →
           </Link>
         </div>
 
         {myClubs.length === 0 ? (
-          <Card className="border-dashed border-slate-300 bg-white">
+          <Card className="border-dashed border-stone-300 bg-white">
             <CardContent className="py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center sm:text-left">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-zinc-900">
                   Je bent nog geen lid van een lokale club
                 </p>
-                <p className="text-xs text-slate-500">
-                  Sluit je aan bij een vaste hub in jouw regio om wekelijkse ritten automatisch hier te zien.
+                <p className="text-xs text-zinc-500">
+                  Sluit je aan bij een vaste hub in jouw regio om wekelijkse
+                  ritten automatisch hier te zien.
                 </p>
               </div>
               <Link
                 href="/social"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors"
               >
                 Bekijk lokale clubs
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -248,28 +251,29 @@ export function ClubhuisClient({
                 <Link
                   key={club.id}
                   href={`/social/clubs/${club.slug}`}
-                  className={`group rounded-xl border border-slate-200 bg-white p-4 shadow-2xs hover:shadow-md transition-all border-l-4 flex flex-col justify-between gap-2.5 ${
-                    isRun
-                      ? "border-l-orange-500"
+                  className="group rounded-xl border border-stone-200 bg-white p-4 shadow-2xs hover:shadow-md transition-all border-l-4 flex flex-col justify-between gap-2.5"
+                  style={{
+                    borderLeftColor: isRun
+                      ? "#ea580c"
                       : isRide
-                      ? "border-l-teal-600"
-                      : "border-l-slate-900"
-                  }`}
+                      ? "#047857"
+                      : "#18181b",
+                  }}
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
                         📍 {club.city}
                       </span>
                       <span className="text-xs font-semibold text-orange-600 group-hover:translate-x-0.5 transition-transform">
                         Open club →
                       </span>
                     </div>
-                    <h3 className="font-bold text-base text-slate-900 group-hover:text-orange-600 transition-colors">
+                    <h3 className="font-bold text-base text-zinc-900 group-hover:text-orange-600 transition-colors">
                       {club.name}
                     </h3>
-                    <p className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <p className="flex items-center gap-1.5 text-xs text-zinc-600">
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                       <span className="truncate">{club.weekly_schedule}</span>
                     </p>
                   </div>
@@ -286,23 +290,25 @@ export function ClubhuisClient({
         <div className="lg:col-span-8 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className="text-lg font-bold text-zinc-900">
                 Mijn Aankomende Agenda ({agendaItems.length})
               </h2>
-              <p className="text-xs text-slate-500">
-                Al jouw wedstrijden, social ritten en club-afspraken chronologisch op één rij.
+              <p className="text-xs text-zinc-500">
+                Al jouw wedstrijden, social ritten en club-afspraken
+                chronologisch op één rij.
               </p>
             </div>
           </div>
 
           {agendaItems.length === 0 ? (
-            <Card className="border-dashed border-slate-300 bg-white">
+            <Card className="border-dashed border-stone-300 bg-white">
               <CardContent className="py-12 text-center space-y-3">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-zinc-900">
                   Je agenda is nog leeg voor de komende periode.
                 </p>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Haak aan bij een pace-treintje op een wedstrijdpagina of stap in een tempogroep bij een Social Rit.
+                <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                  Haak aan bij een pace-treintje op een wedstrijdpagina of stap
+                  in een tempogroep bij een Social Rit.
                 </p>
                 <div className="flex flex-wrap justify-center gap-2 pt-2">
                   <Link
@@ -313,7 +319,7 @@ export function ClubhuisClient({
                   </Link>
                   <Link
                     href="/social"
-                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                    className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-800 hover:bg-stone-50"
                   >
                     Bekijk social ritten
                   </Link>
@@ -337,13 +343,18 @@ export function ClubhuisClient({
                 return (
                   <Card
                     key={item.id}
-                    className={`overflow-hidden border bg-white shadow-xs border-l-4 ${
+                    className={`overflow-hidden border bg-white shadow-2xs border-l-4 ${
                       isSuggestion
-                        ? "border-slate-200 border-dashed border-l-slate-400"
-                        : isRun
-                        ? "border-slate-200 border-l-orange-500"
-                        : "border-slate-200 border-l-teal-600"
+                        ? "border-stone-200 border-dashed"
+                        : "border-stone-200"
                     }`}
+                    style={{
+                      borderLeftColor: isSuggestion
+                        ? "#a1a1aa"
+                        : isRun
+                        ? "#ea580c"
+                        : "#047857",
+                    }}
                   >
                     <CardContent className="p-5 space-y-4">
                       {/* Bovenste rij: Type-badge + Agenda download */}
@@ -370,9 +381,9 @@ export function ClubhuisClient({
                           {item.kind === "club_ride_suggestion" && (
                             <Badge
                               variant="secondary"
-                              className="bg-slate-100 text-slate-700 border border-slate-200 gap-1"
+                              className="bg-stone-100 text-zinc-700 border border-stone-200 gap-1"
                             >
-                              <Shield className="h-3 w-3 text-slate-600" />
+                              <Shield className="h-3 w-3 text-zinc-600" />
                               Clubrit ({item.subtitle})
                             </Badge>
                           )}
@@ -380,10 +391,16 @@ export function ClubhuisClient({
                           <Badge
                             variant="secondary"
                             className={`font-mono ${
-                              isRun
-                                ? "bg-orange-100 text-orange-900"
-                                : "bg-teal-100 text-teal-900"
+                              isRun ? "bg-orange-100 text-orange-900" : ""
                             }`}
+                            style={
+                              !isRun
+                                ? {
+                                    backgroundColor: "#d1fae5",
+                                    color: "#065f46",
+                                  }
+                                : undefined
+                            }
                           >
                             {isRun ? (
                               <Footprints className="mr-1 h-3 w-3" />
@@ -417,9 +434,9 @@ export function ClubhuisClient({
                               filename: "paceline-afspraak.ics",
                             })
                           }
-                          className="h-7 gap-1 bg-white text-xs text-slate-700"
+                          className="h-7 gap-1 bg-white text-xs text-zinc-700"
                         >
-                          <CalendarPlus className="h-3.5 w-3.5 text-slate-500" />
+                          <CalendarPlus className="h-3.5 w-3.5 text-zinc-500" />
                           Agenda
                         </Button>
                       </div>
@@ -427,18 +444,18 @@ export function ClubhuisClient({
                       {/* Titel & Details */}
                       <div>
                         <Link href={item.href} className="group">
-                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-orange-600 transition-colors">
+                          <h3 className="text-lg font-bold text-zinc-900 group-hover:text-orange-600 transition-colors">
                             {item.title}
                           </h3>
                         </Link>
                         {item.groupName && (
-                          <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                          <p className="text-xs font-semibold text-zinc-700 mt-0.5">
                             Jouw vak: {item.groupName}
                           </p>
                         )}
 
-                        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-600">
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-zinc-600">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-zinc-900">
                             <Calendar className="h-3.5 w-3.5 text-orange-600" />
                             {new Date(item.dateIso).toLocaleString("nl-NL", {
                               weekday: "long",
@@ -449,17 +466,17 @@ export function ClubhuisClient({
                             })}
                           </span>
                           <span className="inline-flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                            <MapPin className="h-3.5 w-3.5 text-zinc-400" />
                             {item.location}
                           </span>
                         </div>
                       </div>
 
                       {/* Actiebalk onderaan kaart: Chat openen of inschrijven */}
-                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                      <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
                         <Link
                           href={item.href}
-                          className="text-xs font-semibold text-slate-700 hover:text-orange-600 transition-colors"
+                          className="text-xs font-semibold text-zinc-700 hover:text-orange-600 transition-colors"
                         >
                           {isSuggestion
                             ? "Kies tempogroep & sluit aan →"
@@ -475,7 +492,7 @@ export function ClubhuisClient({
                               setOpenChatKey(isChatOpen ? null : chatKey)
                             }
                             className={`h-8 gap-1.5 text-xs ${
-                              isChatOpen ? "bg-slate-900 text-white" : "bg-white"
+                              isChatOpen ? "bg-zinc-900 text-white" : "bg-white"
                             }`}
                           >
                             <MessageSquare className="h-3.5 w-3.5" />
@@ -489,22 +506,23 @@ export function ClubhuisClient({
 
                       {/* UITKLAPBARE DIRECTE STARTVAK- & RIT-CHAT */}
                       {isChatOpen && chatKey && (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
+                        <div className="rounded-xl border border-stone-200 bg-stone-50 p-3.5 space-y-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-800">
+                            <p className="text-xs font-bold text-zinc-800">
                               {item.channelType === "train"
                                 ? "Startvak-overleg"
                                 : "Rit-chat (weer, materiaal & laatste check)"}
                             </p>
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-zinc-500">
                               Zichtbaar voor deelnemers
                             </span>
                           </div>
 
                           <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
                             {itemMessages.length === 0 ? (
-                              <p className="text-xs text-slate-500 italic py-3 text-center">
-                                Nog geen berichten. Vraag bijv. hoe het weer is of spreek een verzamelpunt af!
+                              <p className="text-xs text-zinc-500 italic py-3 text-center">
+                                Nog geen berichten. Vraag bijv. hoe het weer is of
+                                spreek een verzamelpunt af!
                               </p>
                             ) : (
                               itemMessages.map((msg) => {
@@ -515,19 +533,19 @@ export function ClubhuisClient({
                                     className={`rounded-lg border p-2.5 text-xs ${
                                       isMe
                                         ? "border-orange-200 bg-orange-50/70 ml-6"
-                                        : "border-slate-200 bg-white mr-6"
+                                        : "border-stone-200 bg-white mr-6"
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-2 mb-1">
-                                      <span className="font-bold text-slate-900">
+                                      <span className="font-bold text-zinc-900">
                                         {msg.author_name}
                                         {msg.group_label && (
-                                          <span className="ml-1.5 font-normal text-[10px] text-slate-500">
+                                          <span className="ml-1.5 font-normal text-[10px] text-zinc-500">
                                             ({msg.group_label})
                                           </span>
                                         )}
                                       </span>
-                                      <span className="text-[10px] text-slate-400">
+                                      <span className="text-[10px] text-zinc-400">
                                         {new Date(
                                           msg.created_at
                                         ).toLocaleTimeString("nl-NL", {
@@ -536,7 +554,7 @@ export function ClubhuisClient({
                                         })}
                                       </span>
                                     </div>
-                                    <p className="text-slate-700 leading-relaxed">
+                                    <p className="text-zinc-700 leading-relaxed">
                                       {msg.content}
                                     </p>
                                   </div>
@@ -585,18 +603,18 @@ export function ClubhuisClient({
 
         {/* Rechterkolom (4 cols): Jouw Sportersprofiel */}
         <div className="lg:col-span-4 space-y-6">
-          <Card className="border-slate-200 bg-white shadow-xs">
-            <CardHeader className="border-b bg-slate-50/70 pb-3">
-              <CardTitle className="text-base text-slate-900 flex items-center gap-2">
-                <UserIcon className="h-4 w-4 text-slate-700" />
+          <Card className="border-stone-200 bg-white shadow-2xs">
+            <CardHeader className="border-b border-stone-100 bg-stone-50/70 pb-3">
+              <CardTitle className="text-base text-zinc-900 flex items-center gap-2">
+                <UserIcon className="h-4 w-4 text-zinc-700" />
                 Jouw Sportersprofiel
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <form onSubmit={handleSaveProfile} className="space-y-3.5">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">
-                    Weergavenaam in groepen & chat
+                  <label className="text-xs font-semibold text-zinc-700">
+                    Weergavenaam in groepen &amp; chat
                   </label>
                   <Input
                     value={fullName}
@@ -606,7 +624,7 @@ export function ClubhuisClient({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="text-xs font-semibold text-zinc-700">
                     Regio / Woonplaats
                   </label>
                   <Input
@@ -618,7 +636,7 @@ export function ClubhuisClient({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="text-xs font-semibold text-zinc-700">
                     Lichaamsgewicht (kg, voor W/kg pacing)
                   </label>
                   <Input
@@ -633,7 +651,7 @@ export function ClubhuisClient({
                   type="submit"
                   size="sm"
                   disabled={savingProfile}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs"
+                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white text-xs"
                 >
                   {savingProfile
                     ? "Opslaan..."

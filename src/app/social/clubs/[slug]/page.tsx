@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,9 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-async function resolveOpenStreetMapEmbed(locationText: string): Promise<string | null> {
+async function resolveOpenStreetMapEmbed(
+  locationText: string
+): Promise<string | null> {
   try {
     const cleanQuery = locationText.replace(/\([^)]*\)/g, "").trim();
     if (!cleanQuery) return null;
@@ -45,14 +48,20 @@ async function resolveOpenStreetMapEmbed(locationText: string): Promise<string |
   }
 }
 
-export default async function ClubDetailPage({ params }: PageProps) {
+async function ClubDetailContent({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   await connection();
   const { slug } = await params;
   const supabase = await createClient();
 
   const { data: clubData } = await supabase
     .from("clubs")
-    .select("id, slug, name, sport, city, home_base, weekly_schedule, bio, creator_id")
+    .select(
+      "id, slug, name, sport, city, home_base, weekly_schedule, bio, creator_id"
+    )
     .eq("slug", slug)
     .single();
 
@@ -94,23 +103,25 @@ export default async function ClubDetailPage({ params }: PageProps) {
       resolveOpenStreetMapEmbed(club.home_base),
     ]);
 
-  const clubRides: SocialRideItem[] = ((ridesData as any[]) ?? []).map((r) => ({
-    id: r.id,
-    creator_id: r.creator_id,
-    creator_name: r.creator_name,
-    event_id: r.event_id,
-    sport: r.sport,
-    title: r.title,
-    ride_date: r.ride_date,
-    distance_km: r.distance_km,
-    start_location: r.start_location,
-    vibe_tags: r.vibe_tags ?? [],
-    terrain_summary: r.terrain_summary ?? null,
-    gpx_url: r.gpx_url ?? null,
-    groups: ((r.social_ride_groups as any[]) ?? []).sort(
-      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
-    ),
-  }));
+  const clubRides: SocialRideItem[] = ((ridesData as any[]) ?? []).map(
+    (r) => ({
+      id: r.id,
+      creator_id: r.creator_id,
+      creator_name: r.creator_name,
+      event_id: r.event_id,
+      sport: r.sport,
+      title: r.title,
+      ride_date: r.ride_date,
+      distance_km: r.distance_km,
+      start_location: r.start_location,
+      vibe_tags: r.vibe_tags ?? [],
+      terrain_summary: r.terrain_summary ?? null,
+      gpx_url: r.gpx_url ?? null,
+      groups: ((r.social_ride_groups as any[]) ?? []).sort(
+        (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      ),
+    })
+  );
 
   return (
     <ClubDetailClient
@@ -119,5 +130,23 @@ export default async function ClubDetailPage({ params }: PageProps) {
       clubRides={clubRides}
       mapEmbedUrl={mapEmbedUrl}
     />
+  );
+}
+
+export default function ClubDetailPage({ params }: PageProps) {
+  return (
+    <div className="min-h-screen bg-stone-100 text-zinc-900">
+      <Suspense
+        fallback={
+          <div className="container mx-auto max-w-5xl px-4 py-12">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 text-sm font-medium text-zinc-600">
+              Clubpagina laden...
+            </div>
+          </div>
+        }
+      >
+        <ClubDetailContent params={params} />
+      </Suspense>
+    </div>
   );
 }

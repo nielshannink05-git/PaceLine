@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ function isRunningSport(sport: string | null | undefined): boolean {
   return normalized === "run" || normalized === "hardlopen";
 }
 
-export default async function HomePage() {
+async function HomeContent() {
   await connection();
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
@@ -74,7 +75,7 @@ export default async function HomePage() {
   const nextEvent = ((upcomingEvents as any[]) ?? [])[0] ?? null;
 
   return (
-    <div className="min-h-screen bg-stone-100 text-zinc-900">
+    <>
       {/* 1. TOPBALK + HERO MET JOUW ACHTERGRONDFOTO */}
       <div className="bg-zinc-950 text-white">
         <div className="border-b border-white/10 bg-zinc-950">
@@ -551,6 +552,24 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+    </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <div className="min-h-screen bg-stone-100 text-zinc-900">
+      <Suspense
+        fallback={
+          <div className="container mx-auto max-w-6xl px-4 py-12">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 text-sm font-medium text-zinc-600">
+              PaceLine laden...
+            </div>
+          </div>
+        }
+      >
+        <HomeContent />
+      </Suspense>
     </div>
   );
 }

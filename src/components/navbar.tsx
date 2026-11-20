@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -8,7 +8,14 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Home, LogIn, LogOut, UserCheck } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
-export function Navbar() {
+const NAV_LINKS = [
+  { href: "/wedstrijden", label: "Wedstrijden" },
+  { href: "/social", label: "Social Agenda" },
+  { href: "/calculator", label: "Pacing Tool" },
+  { href: "/blog", label: "Kennisbank" },
+];
+
+function NavbarInner() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -35,13 +42,6 @@ export function Navbar() {
     router.push("/");
     router.refresh();
   }
-
-  const navLinks = [
-    { href: "/wedstrijden", label: "Wedstrijden" },
-    { href: "/social", label: "Social Agenda" },
-    { href: "/calculator", label: "Pacing Tool" },
-    { href: "/blog", label: "Kennisbank" },
-  ];
 
   const isHomeActive = pathname === "/";
 
@@ -80,7 +80,7 @@ export function Navbar() {
 
         {/* Desktop navigatie met dun lijntje om elke knop */}
         <nav className="hidden md:flex items-center gap-2 text-sm font-medium">
-          {navLinks.map((link) => {
+          {NAV_LINKS.map((link) => {
             const isActive =
               pathname === link.href || pathname.startsWith(`${link.href}/`);
             return (
@@ -147,7 +147,7 @@ export function Navbar() {
 
       {/* Mobiele navigatiebalk (< md) met echte knop-pills en dun kader */}
       <nav className="flex md:hidden items-center gap-1.5 overflow-x-auto border-t border-stone-200/80 bg-stone-50/90 px-4 py-2 text-xs font-medium">
-        {navLinks.map((link) => {
+        {NAV_LINKS.map((link) => {
           const isActive =
             pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
@@ -166,5 +166,33 @@ export function Navbar() {
         })}
       </nav>
     </header>
+  );
+}
+
+export function Navbar() {
+  return (
+    <Suspense
+      fallback={
+        <header className="sticky top-0 z-40 border-b border-stone-200/90 bg-white/95 backdrop-blur-xs">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50/90 px-3 py-1.5 font-extrabold text-base sm:text-lg tracking-tight text-zinc-900"
+            >
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-orange-600" />
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: "#047857" }}
+                />
+              </span>
+              <span>PaceLine</span>
+            </Link>
+          </div>
+        </header>
+      }
+    >
+      <NavbarInner />
+    </Suspense>
   );
 }

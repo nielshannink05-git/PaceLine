@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +16,7 @@ export const metadata = {
     "Jouw persoonlijke regiecentrum: aankomende wedstrijden, social ritten van jouw clubs en directe rit-chat.",
 };
 
-export default async function ClubhuisPage() {
+async function ClubhuisContent() {
   await connection();
   const supabase = await createClient();
 
@@ -246,31 +247,45 @@ export default async function ClubhuisPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50/80 pb-20">
-      <div className="border-b bg-white pt-10 pb-8">
+    <ClubhuisClient
+      userId={user.id}
+      userEmail={user.email ?? ""}
+      initialProfile={{
+        full_name: profile?.full_name ?? "Sporter",
+        city: profile?.city ?? null,
+        body_weight_kg: profile?.body_weight_kg ?? 75,
+      }}
+      myClubs={myClubs}
+      agendaItems={agendaItems}
+      initialMessages={initialMessages}
+    />
+  );
+}
+
+export default function ClubhuisPage() {
+  return (
+    <div className="min-h-screen bg-stone-100 pb-20 text-zinc-900">
+      <div className="border-b border-stone-200 bg-white pt-10 pb-8">
         <div className="container mx-auto max-w-6xl px-4">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
             Mijn Clubhuis
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-zinc-600">
             Jouw persoonlijke regiecentrum: aankomende wedstrijden, clubritten en directe groepschat.
           </p>
         </div>
       </div>
 
       <main className="container mx-auto max-w-6xl px-4 pt-8">
-        <ClubhuisClient
-          userId={user.id}
-          userEmail={user.email ?? ""}
-          initialProfile={{
-            full_name: profile?.full_name ?? "Sporter",
-            city: profile?.city ?? null,
-            body_weight_kg: profile?.body_weight_kg ?? 75,
-          }}
-          myClubs={myClubs}
-          agendaItems={agendaItems}
-          initialMessages={initialMessages}
-        />
+        <Suspense
+          fallback={
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 text-sm font-medium text-zinc-600">
+              Clubhuis laden...
+            </div>
+          }
+        >
+          <ClubhuisContent />
+        </Suspense>
       </main>
     </div>
   );

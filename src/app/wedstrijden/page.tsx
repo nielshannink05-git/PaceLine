@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { supabase } from "@/lib/supabase";
@@ -39,12 +40,14 @@ function formatDutchDate(dateString: string) {
   });
 }
 
-export default async function WedstrijdenPage() {
+async function WedstrijdenContent() {
   await connection();
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, slug, title, sport, event_date, distance_km, elevation_m, city")
+    .select(
+      "id, slug, title, sport, event_date, distance_km, elevation_m, city"
+    )
     .order("event_date", { ascending: true });
 
   const eventList = (events as SportEvent[] | null) ?? [];
@@ -52,7 +55,7 @@ export default async function WedstrijdenPage() {
   const rideCount = eventList.filter((e) => !isRunningSport(e.sport)).length;
 
   return (
-    <main className="min-h-screen bg-stone-100 pb-24">
+    <>
       {/* Lichte, frisse kopsectie met subtiele kleuraccenten */}
       <section className="bg-white border-b border-stone-200 pt-6 pb-6 sm:pt-9 sm:pb-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-3">
@@ -241,6 +244,24 @@ export default async function WedstrijdenPage() {
           })}
         </div>
       </section>
+    </>
+  );
+}
+
+export default function WedstrijdenPage() {
+  return (
+    <main className="min-h-screen bg-stone-100 pb-24 text-zinc-900">
+      <Suspense
+        fallback={
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-10">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 text-sm font-medium text-zinc-600">
+              Wedstrijdkalender laden...
+            </div>
+          </div>
+        }
+      >
+        <WedstrijdenContent />
+      </Suspense>
     </main>
   );
 }

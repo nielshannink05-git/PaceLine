@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,9 @@ type PageProps = {
 };
 
 // Haalt gratis een OpenStreetMap embed-URL op basis van de startlocatie
-async function resolveOpenStreetMapEmbed(locationText: string): Promise<string | null> {
+async function resolveOpenStreetMapEmbed(
+  locationText: string
+): Promise<string | null> {
   try {
     // Verwijder extra instructies tussen haakjes voor een betere adres-match
     const cleanQuery = locationText.replace(/\([^)]*\)/g, "").trim();
@@ -48,7 +51,11 @@ async function resolveOpenStreetMapEmbed(locationText: string): Promise<string |
   }
 }
 
-export default async function SocialRideDetailPage({ params }: PageProps) {
+async function SocialRideDetailContent({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   await connection();
   const { id } = await params;
   const supabase = await createClient();
@@ -100,7 +107,9 @@ export default async function SocialRideDetailPage({ params }: PageProps) {
     vibe_tags: raw.vibe_tags ?? [],
     terrain_summary: raw.terrain_summary ?? null,
     gpx_url: raw.gpx_url ?? null,
-    event: raw.events ? { slug: raw.events.slug, title: raw.events.title } : null,
+    event: raw.events
+      ? { slug: raw.events.slug, title: raw.events.title }
+      : null,
     groups: ((raw.social_ride_groups as any[]) ?? []).sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
     ),
@@ -114,5 +123,23 @@ export default async function SocialRideDetailPage({ params }: PageProps) {
       initialParticipants={(participantsData as SocialRideParticipant[]) ?? []}
       mapEmbedUrl={mapEmbedUrl}
     />
+  );
+}
+
+export default function SocialRideDetailPage({ params }: PageProps) {
+  return (
+    <div className="min-h-screen bg-stone-100 text-zinc-900">
+      <Suspense
+        fallback={
+          <div className="container mx-auto max-w-5xl px-4 py-12">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 text-sm font-medium text-zinc-600">
+              Ritdetails laden...
+            </div>
+          </div>
+        }
+      >
+        <SocialRideDetailContent params={params} />
+      </Suspense>
+    </div>
   );
 }
