@@ -99,18 +99,31 @@ export function calculateRunSplits(
 export function calculateRideMetrics(
   distanceKm: number,
   targetSeconds: number,
-  elevationM: number
+  elevationM: number,
+  bodyWeightKg: number | null
 ) {
   const hours = targetSeconds / 3600;
   const avgSpeedKmh = distanceKm / hours;
-
-  // Vuistregel duursport: elke 100 hoogtemeters kost vergelijkbare energie als ~1 km vlak
-  const effectiveDistanceKm = distanceKm + elevationM / 100;
-  const flatEquivalentSpeed = effectiveDistanceKm / hours;
-
-  // Indicatie benodigd vermogen in W/kg op basis van aerodynamica & rolweerstand
+  const speedMetersPerSecond = (distanceKm * 1000) / targetSeconds;
+  const totalMassKg = bodyWeightKg === null ? null : bodyWeightKg + 10;
+  const gravity = 9.81;
+  const aerodynamicWatts = 0.5 * 1.225 * 0.32 * speedMetersPerSecond ** 3;
+  const rollingWatts =
+    totalMassKg === null
+      ? null
+      : totalMassKg * gravity * 0.004 * speedMetersPerSecond;
+  const climbingWatts =
+    totalMassKg === null
+      ? null
+      : totalMassKg * gravity * (elevationM / targetSeconds);
+  const estimatedWatts =
+    rollingWatts === null || climbingWatts === null
+      ? null
+      : (aerodynamicWatts + rollingWatts + climbingWatts) / 0.97;
   const estimatedWkg =
-    0.0041 * Math.pow(flatEquivalentSpeed, 2) + 0.085 * flatEquivalentSpeed;
+    bodyWeightKg === null || estimatedWatts === null
+      ? null
+      : estimatedWatts / bodyWeightKg;
 
   const stepSize = distanceKm >= 80 ? 15 : 10;
   const rows: SplitRow[] = [];
@@ -137,7 +150,7 @@ export function calculateRideMetrics(
 
   return {
     avgSpeedKmh,
-    flatEquivalentSpeed,
+    estimatedWatts,
     estimatedWkg,
     rows,
   };

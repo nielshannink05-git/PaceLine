@@ -1,21 +1,30 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Navbar } from "@/components/navbar"; // <-- 1. Importeer je navigatiebalk
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "PaceClub — Pacing Tool & Social Runs",
-  description: "Bereken je wedstrijdtempo en vind direct je trainingsgroep.",
+  title: {
+    default: "PaceLine — Race-voorbereiding, Pacing & Community",
+    template: "%s | PaceLine",
+  },
+  description:
+    "Bereken je ideale wedstrijdtempo, vind een pace-treintje in het startvak en deel lokale parcours-tips voor hardlopen en wielrennen.",
 };
 
 export default function RootLayout({
@@ -24,12 +33,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="nl">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Navbar /> {/* <-- 2. Zet de balk boven {children} */}
-        {children} {/* <-- 3. Hier laadt Next.js automatisch je huidige page.tsx */}
+    <html lang="nl" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased selection:bg-orange-100 selection:text-orange-900">
+        <Navbar />
+        {children}
+        <Footer />
       </body>
     </html>
   );

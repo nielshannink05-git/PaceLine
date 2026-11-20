@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { supabase } from "@/lib/supabase";
 import {
   Card,
@@ -8,7 +9,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { Calendar, MapPin, Mountain, Footprints, Bike, ArrowRight } from "lucide-react";
+import {
+  Calendar,
+  MapPin,
+  Mountain,
+  Footprints,
+  Bike,
+  ArrowRight,
+  Calculator,
+  Users,
+} from "lucide-react";
 
 interface SportEvent {
   id: string;
@@ -30,16 +40,18 @@ function formatDutchDate(dateString: string) {
 }
 
 export default async function WedstrijdenPage() {
+  await connection();
+
   const { data: events, error } = await supabase
     .from("events")
     .select("id, slug, title, sport, event_date, distance_km, elevation_m, city")
     .order("event_date", { ascending: true });
 
   return (
-    <main className="min-h-screen bg-zinc-50/60">
+    <main className="min-h-screen">
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-8">
         <div className="max-w-2xl space-y-2">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Wedstrijden & Toertochten
           </h1>
           <p className="text-base text-muted-foreground">
@@ -58,7 +70,7 @@ export default async function WedstrijdenPage() {
             const isRun = event.sport === "run";
 
             return (
-              <Card key={event.id} className="flex flex-col justify-between">
+              <Card key={event.id} className="flex flex-col justify-between transition-shadow hover:shadow-md">
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span
@@ -76,44 +88,67 @@ export default async function WedstrijdenPage() {
                       {isRun ? "Hardlopen" : "Wielrennen"}
                     </span>
 
-                    <span className="font-mono text-sm font-bold tabular-nums text-zinc-700">
+                    <span className="font-mono text-sm font-bold tabular-nums text-foreground">
                       {String(event.distance_km).replace(".", ",")} km
                     </span>
                   </div>
 
                   <CardTitle className="text-xl leading-snug">
-                    {event.title}
+                    <Link href={`/wedstrijden/${event.slug}`} className="hover:underline">
+                      {event.title}
+                    </Link>
                   </CardTitle>
                 </CardHeader>
 
                 <CardContent className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 shrink-0 text-zinc-500" />
+                    <Calendar className="h-4 w-4 shrink-0" />
                     <span>{formatDutchDate(event.event_date)}</span>
                   </div>
 
                   {event.city && (
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 shrink-0 text-zinc-500" />
+                      <MapPin className="h-4 w-4 shrink-0" />
                       <span>{event.city}</span>
                     </div>
                   )}
 
                   <div className="flex items-center gap-2">
-                    <Mountain className="h-4 w-4 shrink-0 text-zinc-500" />
+                    <Mountain className="h-4 w-4 shrink-0" />
                     <span className="font-mono tabular-nums">
                       {event.elevation_m} hoogtemeters
                     </span>
                   </div>
                 </CardContent>
 
-                <CardFooter className="pt-2 border-t">
+                <CardFooter className="pt-3 border-t flex items-center gap-2">
                   <Link
-                    href="/"
-                    className={buttonVariants({ variant: "outline", className: "w-full gap-2" })}
+                    href={`/wedstrijden/${event.slug}`}
+                    className={buttonVariants({
+                      variant: "default",
+                      size: "sm",
+                      className: `flex-1 gap-1.5 text-white ${
+                        isRun
+                          ? "bg-orange-600 hover:bg-orange-700"
+                          : "bg-teal-600 hover:bg-teal-700"
+                      }`,
+                    })}
                   >
-                    Bereken pacing voor deze race
-                    <ArrowRight className="h-4 w-4" />
+                    <Users className="h-4 w-4" />
+                    Pace-treintjes
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+
+                  <Link
+                    href={`/calculator?sport=${event.sport}&km=${event.distance_km}&hm=${event.elevation_m}&event=${encodeURIComponent(event.title)}&slug=${event.slug}`}
+                    className={buttonVariants({
+                      variant: "outline",
+                      size: "sm",
+                      className: "gap-1.5",
+                    })}
+                  >
+                    <Calculator className="h-4 w-4" />
+                    Bereken Pacing
                   </Link>
                 </CardFooter>
               </Card>

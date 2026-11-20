@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { ShareRacePlanButton } from "@/components/share-race-plan-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -31,17 +32,28 @@ import {
 import { Footprints, Bike, Users, MapPin, ArrowRight } from "lucide-react";
 
 const RUN_PRESETS = [
+  { label: "1 km", km: 1, defaultSeconds: 4 * 60 + 30 },
+  { label: "3 km", km: 3, defaultSeconds: 14 * 60 },
   { label: "5 km", km: 5, defaultSeconds: 22 * 60, minSeconds: 12 * 60 },
   { label: "10 km", km: 10, defaultSeconds: 46 * 60, minSeconds: 25 * 60 },
+  { label: "15 km", km: 15, defaultSeconds: 69 * 60 },
+  { label: "10 mijl", km: 16.1, defaultSeconds: 75 * 60 },
   { label: "Halve Marathon", km: 21.1, defaultSeconds: 100 * 60, minSeconds: 55 * 60 },
+  { label: "25 km", km: 25, defaultSeconds: 115 * 60 },
+  { label: "30 km", km: 30, defaultSeconds: 140 * 60 },
   { label: "Marathon", km: 42.2, defaultSeconds: 215 * 60, minSeconds: 110 * 60 },
 ];
 
 const RIDE_PRESETS = [
+  { label: "20 km", km: 20, defaultSeconds: 50 * 60 },
+  { label: "40 km", km: 40, defaultSeconds: 90 * 60 },
   { label: "60 km", km: 60, defaultSeconds: 115 * 60 },
+  { label: "80 km", km: 80, defaultSeconds: 160 * 60 },
   { label: "100 km", km: 100, defaultSeconds: 190 * 60 },
+  { label: "120 km", km: 120, defaultSeconds: 230 * 60 },
   { label: "150 km", km: 150, defaultSeconds: 290 * 60 },
   { label: "200 km", km: 200, defaultSeconds: 400 * 60 },
+  { label: "250 km", km: 250, defaultSeconds: 500 * 60 },
 ];
 
 function parseDurationInput(value: string): number | null {
@@ -73,20 +85,71 @@ function formatDurationInput(totalSeconds: number): string {
     : `${minutes}:${pad(seconds)}`;
 }
 
-export function PacingCalculator() {
-  const [sport, setSport] = useState<SportType>("run");
+type Props = {
+  initialSport?: SportType;
+  initialKm?: number;
+  initialHm?: number;
+  eventTitle?: string;
+  eventSlug?: string;
+};
+
+export function PacingCalculator({
+  initialSport,
+  initialKm,
+  initialHm,
+  eventTitle,
+  eventSlug,
+}: Props) {
+  const resolvedSport: SportType = initialSport ?? "run";
+
+  // Beginwaarden hardlopen
+  const resolvedRunKm =
+    resolvedSport === "run" && initialKm && initialKm > 0 ? initialKm : 10;
+  const matchedRunPreset = RUN_PRESETS.find(
+    (p) => Math.abs(p.km - resolvedRunKm) < 0.05
+  );
+  const resolvedRunSec = matchedRunPreset
+    ? matchedRunPreset.defaultSeconds
+    : Math.round(resolvedRunKm * 275); // ~4:35 /km als standaard
+
+  // Beginwaarden wielrennen
+  const resolvedRideKm =
+    resolvedSport === "ride" && initialKm && initialKm > 0 ? initialKm : 100;
+  const matchedRidePreset = RIDE_PRESETS.find(
+    (p) => Math.abs(p.km - resolvedRideKm) < 0.05
+  );
+  const resolvedRideSec = matchedRidePreset
+    ? matchedRidePreset.defaultSeconds
+    : Math.round((resolvedRideKm / 31) * 3600); // ~31 km/u als standaard
+
+  const [sport, setSport] = useState<SportType>(resolvedSport);
 
   // Hardloop-state
-  const [runDistance, setRunDistance] = useState<number>(10);
-  const [runSeconds, setRunSeconds] = useState<number>(46 * 60);
-  const [runDurationDraft, setRunDurationDraft] = useState<string>("46:00");
+  const [runDistance, setRunDistance] = useState<number>(resolvedRunKm);
+  const [runSeconds, setRunSeconds] = useState<number>(resolvedRunSec);
+  const [runDurationDraft, setRunDurationDraft] = useState<string>(
+    formatDurationInput(resolvedRunSec)
+  );
   const [strategy, setStrategy] = useState<PacingStrategy>("even");
 
   // Fiets-state
-  const [rideDistance, setRideDistance] = useState<number>(100);
-  const [rideSeconds, setRideSeconds] = useState<number>(190 * 60);
-  const [rideDurationDraft, setRideDurationDraft] = useState<string>("3:10:00");
-  const [elevation, setElevation] = useState<number>(350);
+  const [rideDistance, setRideDistance] = useState<number>(resolvedRideKm);
+  const [rideSeconds, setRideSeconds] = useState<number>(resolvedRideSec);
+  const [rideDurationDraft, setRideDurationDraft] = useState<string>(
+    formatDurationInput(resolvedRideSec)
+  );
+  const [elevation, setElevation] = useState<number>(
+    initialHm !== undefined && initialHm >= 0 ? initialHm : 350
+  );
+  const [bodyWeightDraft, setBodyWeightDraft] = useState("75");
+
+  const parsedBodyWeightKg = Number(bodyWeightDraft);
+  const bodyWeightKg =
+    bodyWeightDraft.trim() !== "" &&
+    Number.isFinite(parsedBodyWeightKg) &&
+    parsedBodyWeightKg > 0
+      ? parsedBodyWeightKg
+      : null;
 
   const handleSportChange = (value: string) => {
     setSport(value as SportType);
@@ -106,13 +169,23 @@ export function PacingCalculator() {
     const totalSeconds = rideSeconds;
     return {
       totalSeconds,
-      ...calculateRideMetrics(rideDistance, totalSeconds, elevation),
+      ...calculateRideMetrics(
+        rideDistance,
+        totalSeconds,
+        elevation,
+        bodyWeightKg
+      ),
     };
-  }, [rideDistance, rideSeconds, elevation]);
+  }, [rideDistance, rideSeconds, elevation, bodyWeightKg]);
 
   const isRun = sport === "run";
+  const currentDistance = isRun ? runDistance : rideDistance;
+  const presets = isRun ? RUN_PRESETS : RIDE_PRESETS;
+  const hasCustomDistance = !presets.some((p) => Math.abs(p.km - currentDistance) < 0.05);
+
   const minTargetSeconds = isRun
-    ? RUN_PRESETS.find((preset) => preset.km === runDistance)?.minSeconds ?? 1
+    ? RUN_PRESETS.find((preset) => preset.km === runDistance)?.minSeconds ??
+      Math.max(1, Math.round(runDistance * 2.5 * 60))
     : 1;
   const accentText = isRun ? "text-orange-600" : "text-teal-600";
   const accentBg = isRun ? "bg-orange-600 hover:bg-orange-700" : "bg-teal-600 hover:bg-teal-700";
@@ -122,24 +195,52 @@ export function PacingCalculator() {
 
   return (
     <div className="space-y-8">
-      {/* Sport Selectie */}
+      {/* Sport Selectie + Rechtsboven Deel-knop */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <Tabs value={sport} onValueChange={handleSportChange} className="w-full sm:w-auto">
-          <TabsList className="grid w-full sm:w-[320px] grid-cols-2">
-            <TabsTrigger value="run" className="gap-2">
-              <Footprints className="h-4 w-4 text-orange-600" />
-              Hardlopen
-            </TabsTrigger>
-            <TabsTrigger value="ride" className="gap-2">
-              <Bike className="h-4 w-4 text-teal-600" />
-              Wielrennen
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs value={sport} onValueChange={handleSportChange} className="w-full sm:w-auto">
+            <TabsList className="grid w-full sm:w-[320px] grid-cols-2">
+              <TabsTrigger value="run" className="gap-2">
+                <Footprints className="h-4 w-4 text-orange-600" />
+                Hardlopen
+              </TabsTrigger>
+              <TabsTrigger value="ride" className="gap-2">
+                <Bike className="h-4 w-4 text-teal-600" />
+                Wielrennen
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-        <span className="text-xs font-medium text-muted-foreground">
-          Kies je afstand & streeftijd voor splittijden en groepsmatches
-        </span>
+          {eventTitle && (
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${accentBadge}`}>
+              Wedstrijd: {eventTitle}
+            </span>
+          )}
+        </div>
+
+        <ShareRacePlanButton
+          sport={sport}
+          eventTitle={eventTitle}
+          eventSlug={eventSlug}
+          distanceKm={currentDistance}
+          durationFormatted={formatDuration(isRun ? runSeconds : rideSeconds)}
+          paceOrSpeedLabel={
+            isRun
+              ? `${formatRunPace(runStats.secPerKm)} /km`
+              : `${rideStats.avgSpeedKmh.toFixed(1).replace(".", ",")} km/u`
+          }
+          extraMetricLabel={
+            isRun
+              ? strategy === "negative"
+                ? "Negative split (2,5%)"
+                : "Vlak tempo"
+              : `${elevation} hm${
+                  rideStats.estimatedWatts !== null
+                    ? ` · circa ${Math.round(rideStats.estimatedWatts)} W`
+                    : ""
+                }`
+          }
+        />
       </div>
 
       {/* Hoofdgrid: Controls links, Resultaten rechts */}
@@ -157,12 +258,17 @@ export function PacingCalculator() {
           <CardContent className="space-y-6">
             {/* Afstand Presets */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Afstand</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Afstand</label>
+                {hasCustomDistance && (
+                  <span className={`text-xs font-mono font-semibold tabular-nums ${accentText}`}>
+                    Wedstrijdafstand: {currentDistance} km
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {(isRun ? RUN_PRESETS : RIDE_PRESETS).map((preset) => {
-                  const active = isRun
-                    ? runDistance === preset.km
-                    : rideDistance === preset.km;
+                {presets.map((preset) => {
+                  const active = Math.abs(currentDistance - preset.km) < 0.05;
                   return (
                     <Button
                       key={preset.label}
@@ -239,9 +345,7 @@ export function PacingCalculator() {
                     const max = isRun
                       ? Math.round(runDistance * 7.5 * 60)
                       : Math.round(rideDistance * 3.2 * 60);
-                    const min = isRun
-                      ? RUN_PRESETS.find((preset) => preset.km === runDistance)?.minSeconds ?? 1
-                      : 1;
+                    const min = minTargetSeconds;
                     const clamped = Math.max(min, Math.min(max, parsed));
 
                     if (isRun) {
@@ -280,23 +384,54 @@ export function PacingCalculator() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-3 pt-2 border-t">
-                <div className="flex justify-between items-baseline">
-                  <label className="text-sm font-medium">Hoogtemeters</label>
-                  <span className="text-sm font-mono font-semibold tabular-nums">
-                    {elevation} hm
-                  </span>
+              <div className="space-y-4 pt-2 border-t">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-baseline">
+                    <label className="text-sm font-medium">Hoogtemeters</label>
+                    <span className="text-sm font-mono font-semibold tabular-nums">
+                      {elevation} hm
+                    </span>
+                  </div>
+                  <Slider
+                    value={[elevation]}
+                    min={0}
+                    max={3000}
+                    step={50}
+                    onValueChange={(val) => {
+                      const next = Array.isArray(val) ? val[0] : val;
+                      setElevation(next);
+                    }}
+                  />
                 </div>
-                <Slider
-                  value={[elevation]}
-                  min={0}
-                  max={3000}
-                  step={50}
-                  onValueChange={(val) => {
-                    const next = Array.isArray(val) ? val[0] : val;
-                    setElevation(next);
-                  }}
-                />
+                <div className="space-y-2">
+                  <label htmlFor="body-weight" className="text-sm font-medium">
+                    Lichaamsgewicht
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="body-weight"
+                      type="number"
+                      min="1"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={bodyWeightDraft}
+                      aria-invalid={bodyWeightKg === null}
+                      aria-describedby="body-weight-help"
+                      className="w-28 font-mono"
+                      onChange={(event) => setBodyWeightDraft(event.target.value)}
+                    />
+                    <span className="text-sm text-muted-foreground">kg</span>
+                  </div>
+                  <p id="body-weight-help" className="text-xs text-muted-foreground">
+                    Geschat vermogen gebruikt een fiets van 10 kg, geen wind en standaard
+                    luchtweerstand; het is een richtlijn.
+                  </p>
+                  {bodyWeightKg === null && (
+                    <p className="text-xs text-destructive">
+                      Vul een lichaamsgewicht groter dan 0 kg in om W/kg te berekenen.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
@@ -322,13 +457,20 @@ export function PacingCalculator() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                  {isRun ? "Snelheid" : "Richtlijn Vermogen"}
+                  {isRun ? "Snelheid" : "Vermogen / kg (schatting)"}
                 </p>
                 <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-1">
                   {isRun
                     ? `${runStats.speedKmh.toFixed(1).replace(".", ",")} km/u`
-                    : `${rideStats.estimatedWkg.toFixed(1).replace(".", ",")} W/kg`}
+                    : rideStats.estimatedWkg === null
+                      ? "—"
+                      : `${rideStats.estimatedWkg.toFixed(1).replace(".", ",")} W/kg`}
                 </p>
+                {!isRun && rideStats.estimatedWatts !== null && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    circa {Math.round(rideStats.estimatedWatts)} W
+                  </p>
+                )}
               </CardContent>
             </Card>
 
